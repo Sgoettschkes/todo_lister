@@ -9,6 +9,7 @@ defmodule TodoLister.TodoItem do
     field :text, :string
     field :status, Ecto.Enum, values: [:todo, :done, :wont_do], default: :todo
     field :deleted_at, :naive_datetime
+    field :order, :integer, default: 0
     
     belongs_to :todo_list, TodoLister.TodoList
 
@@ -18,7 +19,7 @@ defmodule TodoLister.TodoItem do
   @doc false
   def changeset(todo_item, attrs) do
     todo_item
-    |> cast(attrs, [:text, :status, :todo_list_id, :deleted_at])
+    |> cast(attrs, [:text, :status, :todo_list_id, :deleted_at, :order])
     |> validate_required([:todo_list_id])
     |> validate_required([:text])
     |> validate_length(:text, min: 1, max: 500)

@@ -121,7 +121,7 @@ defmodule TodoLister.Lists do
     Repo.all(
       from ti in TodoItem,
         where: ti.todo_list_id == ^todo_list.id and is_nil(ti.deleted_at),
-        order_by: [asc: ti.inserted_at]
+        order_by: [asc: ti.order, asc: ti.inserted_at]
     )
   end
 
@@ -154,9 +154,26 @@ defmodule TodoLister.Lists do
 
   """
   def create_todo_item(%TodoList{} = todo_list, attrs \\ %{}) do
+    # Get the next order value
+    next_order = get_next_order(todo_list.id)
+    attrs_with_order = attrs
+    |> Map.put(:todo_list_id, todo_list.id)
+    |> Map.put_new(:order, next_order)
+    
     %TodoItem{}
-    |> TodoItem.changeset(Map.put(attrs, :todo_list_id, todo_list.id))
+    |> TodoItem.changeset(attrs_with_order)
     |> Repo.insert()
+  end
+
+  defp get_next_order(todo_list_id) do
+    case Repo.one(
+      from ti in TodoItem,
+        where: ti.todo_list_id == ^todo_list_id and is_nil(ti.deleted_at),
+        select: max(ti.order)
+    ) do
+      nil -> 1
+      max_order -> max_order + 1
+    end
   end
 
   @doc """
@@ -209,6 +226,23 @@ defmodule TodoLister.Lists do
   end
 
   @doc """
+  Reorders todo items by updating their order values.
+  
+  ## Examples
+  
+      iex> reorder_todo_items([%{id: "1", order: 2}, %{id: "2", order: 1}])
+      :ok
+  """
+  def reorder_todo_items(item_orders) do
+    Repo.transaction(fn ->
+      Enum.each(item_orders, fn %{id: id, order: order} ->
+        from(ti in TodoItem, where: ti.id == ^id)
+        |> Repo.update_all(set: [order: order])
+      end)
+    end)
+  end
+
+  @doc """
   Gets a todo_list with its todo_items preloaded.
 
   ## Examples
@@ -220,7 +254,7 @@ defmodule TodoLister.Lists do
   def get_todo_list_with_items!(id) do
     todo_list = from(tl in TodoList, where: tl.id == ^id and is_nil(tl.deleted_at))
     |> Repo.one!()
-    |> Repo.preload(todo_items: from(ti in TodoItem, where: is_nil(ti.deleted_at), order_by: [asc: ti.inserted_at]))
+    |> Repo.preload(todo_items: from(ti in TodoItem, where: is_nil(ti.deleted_at), order_by: [asc: ti.order, asc: ti.inserted_at]))
     
     # Calculate the latest updated_at from the list or any of its items
     latest_updated_at = 

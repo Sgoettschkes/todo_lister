@@ -217,6 +217,12 @@ defmodule TodoListerWeb.TodoListLive do
   end
 
   @impl true
+  def handle_event("prevent_edit", _params, socket) do
+    # This event does nothing - it just prevents the edit_item event from firing
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_event("edit_item", %{"id" => id}, socket) do
     {:noreply, assign(socket, :editing_item_id, id)}
   end
@@ -224,6 +230,59 @@ defmodule TodoListerWeb.TodoListLive do
   @impl true
   def handle_event("cancel_edit_item", _params, socket) do
     {:noreply, assign(socket, :editing_item_id, nil)}
+  end
+
+  @impl true
+  def handle_event("reorder_item", %{"item_id" => item_id, "reference_id" => reference_id, "position" => position}, socket) do
+    # Get all current items ordered
+    current_items = socket.assigns.todo_items
+    |> Enum.sort_by(& &1.order)
+    
+    # Find indices
+    item_index = Enum.find_index(current_items, &(&1.id == item_id))
+    reference_index = Enum.find_index(current_items, &(&1.id == reference_id))
+    
+    if item_index && reference_index do
+      # Calculate new order values
+      new_orders = case position do
+        "before" ->
+          # Insert before reference item
+          current_items
+          |> List.delete_at(item_index)
+          |> List.insert_at(if item_index < reference_index do reference_index - 1 else reference_index end, Enum.at(current_items, item_index))
+          |> Enum.with_index(1)
+          |> Enum.map(fn {item, new_order} -> %{id: item.id, order: new_order} end)
+        
+        "after" ->
+          # Insert after reference item
+          current_items
+          |> List.delete_at(item_index)
+          |> List.insert_at(if item_index < reference_index do reference_index else reference_index + 1 end, Enum.at(current_items, item_index))
+          |> Enum.with_index(1)
+          |> Enum.map(fn {item, new_order} -> %{id: item.id, order: new_order} end)
+      end
+      
+      # Update database
+      case Lists.reorder_todo_items(new_orders) do
+        {:ok, _} ->
+          broadcast_updated(socket.assigns.todo_list.id)
+          
+          # Reload the todo list
+          updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
+          
+          socket =
+            socket
+            |> assign(:todo_list, updated_todo_list)
+            |> assign(:todo_items, updated_todo_list.todo_items)
+          
+          {:noreply, socket}
+        
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Failed to reorder items")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Could not find items to reorder")}
+    end
   end
 
   @impl true
@@ -408,7 +467,7 @@ defmodule TodoListerWeb.TodoListLive do
               </div>
 
               <!-- Todo Items List -->
-              <div class="space-y-2">
+              <div class="space-y-2 min-h-[100px]" phx-hook="DragDrop" id="todo-items-container">
                 <%= if @todo_items == [] do %>
                   <div class="text-center py-12 text-gray-500">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -426,8 +485,28 @@ defmodule TodoListerWeb.TodoListLive do
                       item.status == :todo && "bg-white border-gray-200 hover:border-orange-300",
                       @editing_item_id == item.id && "bg-orange-50 border-orange-300 ring-2 ring-orange-200"
                     ]}
+                    data-draggable
+                    data-item-id={item.id}
                     phx-click="edit_item"
                     phx-value-id={item.id}>
+                      <!-- Drag Handle -->
+                      <div class="flex-shrink-0 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 p-1 rounded hover:bg-gray-100 transition-colors" 
+                           data-drag-handle 
+                           phx-click="prevent_edit"
+                           title="Drag to reorder">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                          <circle cx="5" cy="5" r="2"/>
+                          <circle cx="12" cy="5" r="2"/>
+                          <circle cx="19" cy="5" r="2"/>
+                          <circle cx="5" cy="12" r="2"/>
+                          <circle cx="12" cy="12" r="2"/>
+                          <circle cx="19" cy="12" r="2"/>
+                          <circle cx="5" cy="19" r="2"/>
+                          <circle cx="12" cy="19" r="2"/>
+                          <circle cx="19" cy="19" r="2"/>
+                        </svg>
+                      </div>
+                      
                       <!-- Checkbox/Status Toggle -->
                       <button 
                         phx-click="toggle_status" 
