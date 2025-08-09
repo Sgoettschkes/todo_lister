@@ -115,6 +115,20 @@ defmodule TodoListerWeb.TodoListLiveTest do
       
       assert html =~ "Blur Updated Title"
     end
+
+    test "syncs title updates between multiple clients via PubSub", %{conn: conn, todo_list: todo_list} do
+      # Start two LiveView clients for the same todo list
+      {:ok, view1, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      {:ok, view2, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      # Update title in first client
+      view1 |> element("h1") |> render_click()
+      view1 |> element("form[phx-submit='save_title']") |> render_submit(%{title: "PubSub Updated Title"})
+      
+      # Verify both clients show the updated title
+      assert render(view1) =~ "PubSub Updated Title"
+      assert render(view2) =~ "PubSub Updated Title"
+    end
   end
 
   describe "Todo items functionality" do
