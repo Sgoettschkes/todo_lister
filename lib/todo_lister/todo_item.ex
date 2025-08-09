@@ -10,7 +10,7 @@ defmodule TodoLister.TodoItem do
     field :status, Ecto.Enum, values: [:todo, :done, :wont_do], default: :todo
     field :deleted_at, :naive_datetime
     field :order, :integer, default: 0
-    
+
     belongs_to :todo_list, TodoLister.TodoList
 
     timestamps()

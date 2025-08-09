@@ -61,6 +61,7 @@ defmodule TodoLister.Lists do
         if client_id do
           History.record_list_created(todo_list, client_id)
         end
+
         result
 
       error ->
@@ -91,6 +92,7 @@ defmodule TodoLister.Lists do
         if client_id && updated_todo_list.title != old_title do
           History.record_list_title_updated(updated_todo_list, old_title, client_id)
         end
+
         result
 
       error ->
@@ -119,6 +121,7 @@ defmodule TodoLister.Lists do
         if client_id do
           History.record_list_deleted(deleted_todo_list, client_id)
         end
+
         result
 
       error ->
@@ -189,10 +192,12 @@ defmodule TodoLister.Lists do
   def create_todo_item(%TodoList{} = todo_list, attrs \\ %{}, client_id \\ nil) do
     # Get the next order value
     next_order = get_next_order(todo_list.id)
-    attrs_with_order = attrs
-    |> Map.put(:todo_list_id, todo_list.id)
-    |> Map.put_new(:order, next_order)
-    
+
+    attrs_with_order =
+      attrs
+      |> Map.put(:todo_list_id, todo_list.id)
+      |> Map.put_new(:order, next_order)
+
     case %TodoItem{}
          |> TodoItem.changeset(attrs_with_order)
          |> Repo.insert() do
@@ -201,6 +206,7 @@ defmodule TodoLister.Lists do
         if client_id && todo_item.text != "New task" do
           History.record_item_created(todo_item, client_id)
         end
+
         result
 
       error ->
@@ -210,10 +216,10 @@ defmodule TodoLister.Lists do
 
   defp get_next_order(todo_list_id) do
     case Repo.one(
-      from ti in TodoItem,
-        where: ti.todo_list_id == ^todo_list_id and is_nil(ti.deleted_at),
-        select: max(ti.order)
-    ) do
+           from ti in TodoItem,
+             where: ti.todo_list_id == ^todo_list_id and is_nil(ti.deleted_at),
+             select: max(ti.order)
+         ) do
       nil -> 1
       max_order -> max_order + 1
     end
@@ -250,11 +256,12 @@ defmodule TodoLister.Lists do
               History.record_item_text_updated(updated_todo_item, old_text, client_id)
             end
           end
-          
+
           if updated_todo_item.status != old_status do
             History.record_item_status_updated(updated_todo_item, old_status, client_id)
           end
         end
+
         result
 
       error ->
@@ -283,6 +290,7 @@ defmodule TodoLister.Lists do
         if client_id do
           History.record_item_deleted(deleted_todo_item, client_id)
         end
+
         result
 
       error ->
@@ -305,24 +313,25 @@ defmodule TodoLister.Lists do
 
   @doc """
   Reorders todo items by updating their order values.
-  
+
   ## Examples
-  
+
       iex> reorder_todo_items([%{id: "1", order: 2}, %{id: "2", order: 1}], todo_list_id, client_id)
       {:ok, _}
   """
   def reorder_todo_items(item_orders, todo_list_id \\ nil, client_id \\ nil) do
     case Repo.transaction(fn ->
-      Enum.each(item_orders, fn %{id: id, order: order} ->
-        from(ti in TodoItem, where: ti.id == ^id)
-        |> Repo.update_all(set: [order: order])
-      end)
-    end) do
+           Enum.each(item_orders, fn %{id: id, order: order} ->
+             from(ti in TodoItem, where: ti.id == ^id)
+             |> Repo.update_all(set: [order: order])
+           end)
+         end) do
       {:ok, result} ->
         # Record history if client_id and todo_list_id are provided
         if client_id && todo_list_id do
           History.record_items_reordered(todo_list_id, item_orders, client_id)
         end
+
         {:ok, result}
 
       error ->
@@ -340,15 +349,22 @@ defmodule TodoLister.Lists do
 
   """
   def get_todo_list_with_items!(id) do
-    todo_list = from(tl in TodoList, where: tl.id == ^id and is_nil(tl.deleted_at))
-    |> Repo.one!()
-    |> Repo.preload(todo_items: from(ti in TodoItem, where: is_nil(ti.deleted_at), order_by: [asc: ti.order, asc: ti.inserted_at]))
-    
+    todo_list =
+      from(tl in TodoList, where: tl.id == ^id and is_nil(tl.deleted_at))
+      |> Repo.one!()
+      |> Repo.preload(
+        todo_items:
+          from(ti in TodoItem,
+            where: is_nil(ti.deleted_at),
+            order_by: [asc: ti.order, asc: ti.inserted_at]
+          )
+      )
+
     # Calculate the latest updated_at from the list or any of its items
-    latest_updated_at = 
+    latest_updated_at =
       [todo_list.updated_at | Enum.map(todo_list.todo_items, & &1.updated_at)]
       |> Enum.max(NaiveDateTime)
-    
+
     # Add the calculated latest update time to the struct
     Map.put(todo_list, :latest_updated_at, latest_updated_at)
   end

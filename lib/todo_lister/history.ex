@@ -9,7 +9,7 @@ defmodule TodoLister.History do
 
   @doc """
   Creates a history entry for a todo list change.
-  
+
   ## Examples
 
       iex> create_history("list_created", client_id, %{todo_list_id: list_id, new_data: %{title: "New List"}})
@@ -20,9 +20,10 @@ defmodule TodoLister.History do
 
   """
   def create_history(change_type, client_id, attrs \\ %{}) do
-    attrs_with_defaults = attrs
-    |> Map.put(:change_type, change_type)
-    |> Map.put(:client_id, client_id)
+    attrs_with_defaults =
+      attrs
+      |> Map.put(:change_type, change_type)
+      |> Map.put(:client_id, client_id)
 
     %TodoListHistory{}
     |> TodoListHistory.changeset(attrs_with_defaults)
@@ -134,7 +135,7 @@ defmodule TodoLister.History do
 
   @doc """
   Gets the history for a todo list, ordered by most recent first.
-  
+
   ## Examples
 
       iex> get_list_history(todo_list_id)
@@ -155,7 +156,7 @@ defmodule TodoLister.History do
 
   @doc """
   Gets the history for a specific todo item.
-  
+
   ## Examples
 
       iex> get_item_history(todo_item_id)

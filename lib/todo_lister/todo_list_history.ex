@@ -11,14 +11,14 @@ defmodule TodoLister.TodoListHistory do
     "list_created",
     "list_title_updated",
     "list_deleted",
-    
+
     # Todo Item operations
     "item_created",
-    "item_text_updated", 
+    "item_text_updated",
     "item_status_updated",
     "item_order_updated",
     "item_deleted",
-    
+
     # Bulk operations
     "items_reordered"
   ]
@@ -28,7 +28,7 @@ defmodule TodoLister.TodoListHistory do
     field :client_id, :string
     field :old_data, :map
     field :new_data, :map
-    
+
     belongs_to :todo_list, TodoLister.TodoList
     belongs_to :todo_item, TodoLister.TodoItem
 

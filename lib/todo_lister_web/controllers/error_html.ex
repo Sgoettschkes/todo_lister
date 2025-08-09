@@ -21,9 +21,11 @@ defmodule TodoListerWeb.ErrorHTML do
       "404.html" ->
         # Use our custom 404 template
         render("404.html.heex", assigns)
+
       "400.html" ->
         # Use our custom 400 template
         render("400.html.heex", assigns)
+
       _ ->
         # The default is to render a plain text page based on
         # the template name. For example, "500.html" becomes

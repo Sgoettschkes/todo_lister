@@ -8,7 +8,7 @@ defmodule TodoLister.TodoList do
   schema "todo_lists" do
     field :title, :string
     field :deleted_at, :naive_datetime
-    
+
     has_many :todo_items, TodoLister.TodoItem
 
     timestamps()

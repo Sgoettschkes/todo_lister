@@ -35,7 +35,10 @@ defmodule TodoListerWeb.LandingLive do
                   Real-time collaborative todo lists powered by Phoenix LiveView
                 </p>
                 <div class="flex justify-center gap-4">
-                  <button phx-click="create_list" class="btn btn-primary bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600 text-white">
+                  <button
+                    phx-click="create_list"
+                    class="btn btn-primary bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600 text-white"
+                  >
                     Create New List
                   </button>
                 </div>

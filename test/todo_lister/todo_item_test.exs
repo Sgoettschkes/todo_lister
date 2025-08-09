@@ -1,6 +1,6 @@
 defmodule TodoLister.TodoItemTest do
   use TodoLister.DataCase
-  
+
   alias TodoLister.TodoItem
   alias TodoLister.Lists
 
