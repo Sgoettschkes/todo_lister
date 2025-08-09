@@ -3,6 +3,15 @@ defmodule TodoListerWeb.TodoListLive do
 
   alias TodoLister.Lists
 
+  # Helper function to broadcast updates to all clients
+  defp broadcast_updated(todo_list_id) do
+    Phoenix.PubSub.broadcast(
+      TodoLister.PubSub,
+      "todo_list:#{todo_list_id}",
+      :updated
+    )
+  end
+
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     try do
@@ -49,12 +58,7 @@ defmodule TodoListerWeb.TodoListLive do
     
     case Lists.update_todo_list(socket.assigns.todo_list, %{title: title}) do
       {:ok, updated_todo_list} ->
-        # Broadcast the title update to all connected clients
-        Phoenix.PubSub.broadcast(
-          TodoLister.PubSub,
-          "todo_list:#{updated_todo_list.id}",
-          {:title_updated, updated_todo_list.title}
-        )
+        broadcast_updated(updated_todo_list.id)
         
         socket =
           socket
@@ -95,6 +99,8 @@ defmodule TodoListerWeb.TodoListLive do
     # Create a new item with placeholder text and immediately put it in edit mode
     case Lists.create_todo_item(socket.assigns.todo_list, %{text: "New task"}) do
       {:ok, new_item} ->
+        broadcast_updated(socket.assigns.todo_list.id)
+        
         # Reload the todo list to get updated latest_updated_at
         updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
         
@@ -123,6 +129,8 @@ defmodule TodoListerWeb.TodoListLive do
 
     case Lists.update_todo_item(item, %{status: new_status}) do
       {:ok, updated_item} ->
+        broadcast_updated(socket.assigns.todo_list.id)
+        
         # Reload the todo list to get updated latest_updated_at
         updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
         
@@ -149,6 +157,8 @@ defmodule TodoListerWeb.TodoListLive do
 
     case Lists.update_todo_item(item, %{status: :wont_do}) do
       {:ok, updated_item} ->
+        broadcast_updated(socket.assigns.todo_list.id)
+        
         # Reload the todo list to get updated latest_updated_at
         updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
         
@@ -187,6 +197,8 @@ defmodule TodoListerWeb.TodoListLive do
 
     case Lists.delete_todo_item(item) do
       {:ok, _deleted_item} ->
+        broadcast_updated(socket.assigns.todo_list.id)
+        
         # Reload the todo list to get updated latest_updated_at
         updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
         
@@ -237,6 +249,8 @@ defmodule TodoListerWeb.TodoListLive do
     
     case Lists.update_todo_item(item, %{text: text}) do
       {:ok, updated_item} ->
+        broadcast_updated(socket.assigns.todo_list.id)
+        
         # Reload the todo list to get updated latest_updated_at
         updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
         
@@ -259,21 +273,17 @@ defmodule TodoListerWeb.TodoListLive do
   end
 
   @impl true
-  def handle_info({:title_updated, new_title}, socket) do
-    # Update the title from PubSub broadcast (from other clients)
-    # Only update if we're not currently editing the title
-    if socket.assigns.editing_title do
-      {:noreply, socket}
-    else
-      updated_todo_list = Map.put(socket.assigns.todo_list, :title, new_title)
-      
-      socket =
-        socket
-        |> assign(:todo_list, updated_todo_list)
-        |> assign(:page_title, new_title)
-      
-      {:noreply, socket}
-    end
+  def handle_info(:updated, socket) do
+    # Reload the full todo list from database when any change occurs
+    updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
+    
+    socket =
+      socket
+      |> assign(:todo_list, updated_todo_list)
+      |> assign(:page_title, updated_todo_list.title)
+      |> assign(:todo_items, updated_todo_list.todo_items)
+    
+    {:noreply, socket}
   end
 
   @impl true

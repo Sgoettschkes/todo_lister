@@ -129,6 +129,20 @@ defmodule TodoListerWeb.TodoListLiveTest do
       assert render(view1) =~ "PubSub Updated Title"
       assert render(view2) =~ "PubSub Updated Title"
     end
+
+    test "syncs todo item changes between multiple clients via PubSub", %{conn: conn, todo_list: todo_list} do
+      # Start two LiveView clients for the same todo list
+      {:ok, view1, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      {:ok, view2, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      # Add item in first client
+      view1 |> element("button[phx-click='add_item']") |> render_click()
+      view1 |> element("form[phx-submit='save_item']") |> render_submit(%{text: "Synced Item"})
+      
+      # Verify both clients show the new item
+      assert render(view1) =~ "Synced Item"
+      assert render(view2) =~ "Synced Item"
+    end
   end
 
   describe "Todo items functionality" do
