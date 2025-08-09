@@ -7,6 +7,7 @@ defmodule TodoLister.TodoList do
 
   schema "todo_lists" do
     field :title, :string
+    field :deleted_at, :naive_datetime
     
     has_many :todo_items, TodoLister.TodoItem
 
@@ -16,7 +17,7 @@ defmodule TodoLister.TodoList do
   @doc false
   def changeset(todo_list, attrs) do
     todo_list
-    |> cast(attrs, [:title])
+    |> cast(attrs, [:title, :deleted_at])
     |> validate_required([:title])
     |> validate_length(:title, min: 1, max: 255)
   end

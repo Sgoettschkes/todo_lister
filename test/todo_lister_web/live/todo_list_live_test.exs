@@ -283,4 +283,34 @@ defmodule TodoListerWeb.TodoListLiveTest do
       refute Enum.any?(updated_todo_list.todo_items, &(&1.id == item.id))
     end
   end
+
+  describe "Todo list soft delete" do
+    test "delete_todo_list soft deletes list from queries but keeps it in database", %{todo_list: todo_list} do
+      # Soft delete the todo list
+      {:ok, deleted_list} = TodoLister.Lists.delete_todo_list(todo_list)
+      
+      # Verify the list has deleted_at timestamp
+      assert not is_nil(deleted_list.deleted_at)
+      assert deleted_list.title == todo_list.title
+      
+      # Verify it doesn't appear in list_todo_lists
+      all_lists = TodoLister.Lists.list_todo_lists()
+      refute Enum.any?(all_lists, &(&1.id == todo_list.id))
+      
+      # Verify get_todo_list! raises error for deleted list
+      assert_raise Ecto.NoResultsError, fn ->
+        TodoLister.Lists.get_todo_list!(todo_list.id)
+      end
+      
+      # Verify get_todo_list_with_items! raises error for deleted list
+      assert_raise Ecto.NoResultsError, fn ->
+        TodoLister.Lists.get_todo_list_with_items!(todo_list.id)
+      end
+      
+      # But we can still access it directly from Repo with raw query
+      db_list = TodoLister.Repo.get!(TodoLister.TodoList, todo_list.id)
+      assert db_list.title == todo_list.title
+      assert not is_nil(db_list.deleted_at)
+    end
+  end
 end
