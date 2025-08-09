@@ -391,7 +391,7 @@ defmodule TodoListerWeb.TodoListLive do
                           <button 
                             phx-click="soft_delete" 
                             phx-value-id={item.id}
-                            class="btn btn-ghost btn-xs text-gray-500 hover:text-red-600"
+                            class="btn btn-ghost btn-xs text-gray-500 hover:text-orange-600 px-1 py-3"
                             title="Mark as won't do"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -419,7 +419,7 @@ defmodule TodoListerWeb.TodoListLive do
                             <button 
                               phx-click="confirm_hard_delete" 
                               phx-value-id={item.id}
-                              class="btn btn-ghost btn-xs text-gray-500 hover:text-red-600"
+                              class="btn btn-ghost btn-xs text-gray-500 hover:text-orange-600 px-1 py-3"
                               title="Delete permanently"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
