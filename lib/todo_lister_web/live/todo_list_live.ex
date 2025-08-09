@@ -533,6 +533,7 @@ defmodule TodoListerWeb.TodoListLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <.navbar />
     <div class="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
       <.flash :if={@flash["info"]} kind={:info} flash={@flash} />
       <.flash :if={@flash["error"]} kind={:error} flash={@flash} />
@@ -835,10 +836,6 @@ defmodule TodoListerWeb.TodoListLive do
                       {Calendar.strftime(@todo_list.latest_updated_at, "%B %d, %Y at %I:%M %p")}
                     </div>
                   </div>
-
-                  <.link navigate={~p"/"} class="btn btn-ghost btn-sm">
-                    ← Back to Home
-                  </.link>
                 </div>
               </div>
             </div>

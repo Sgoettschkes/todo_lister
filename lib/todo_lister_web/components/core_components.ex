@@ -31,6 +31,11 @@ defmodule TodoListerWeb.CoreComponents do
 
   alias Phoenix.LiveView.JS
 
+  use Phoenix.VerifiedRoutes,
+    endpoint: TodoListerWeb.Endpoint,
+    router: TodoListerWeb.Router,
+    statics: TodoListerWeb.static_paths()
+
   @doc """
   Renders flash notices.
 
@@ -472,6 +477,53 @@ defmodule TodoListerWeb.CoreComponents do
     else
       Gettext.dgettext(TodoListerWeb.Gettext, "errors", msg, opts)
     end
+  end
+
+  @doc """
+  Renders the TodoLister navigation bar with logo and navigation.
+
+  ## Examples
+
+      <.navbar />
+  """
+  attr :class, :string, default: nil
+
+  def navbar(assigns) do
+    ~H"""
+    <header class={[
+      "bg-white border-b border-gray-200 shadow-sm",
+      @class
+    ]}>
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+          <.link
+            navigate={~p"/"}
+            class="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+          >
+            <!-- TodoLister Icon -->
+            <div class="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center shadow-sm">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                />
+              </svg>
+            </div>
+            <!-- App Name -->
+            <span class="text-xl font-bold text-gray-900">TodoLister</span>
+          </.link>
+        </div>
+      </div>
+    </header>
+    """
   end
 
   @doc """
