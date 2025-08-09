@@ -35,7 +35,7 @@ defmodule TodoListerWeb.TodoListLiveTest do
       {:ok, _view, html} = live(conn, ~p"/tl/#{todo_list.id}")
       
       assert html =~ "No todo items yet"
-      assert html =~ "Add First Task"
+      assert html =~ "Click the + button to add your first task!"
     end
   end
 
@@ -79,8 +79,8 @@ defmodule TodoListerWeb.TodoListLiveTest do
       # Enter edit mode
       view |> element("h1") |> render_click()
       
-      # Submit new title
-      html = view |> element("form") |> render_submit(%{title: "Updated Title"})
+      # Submit new title using the specific form
+      html = view |> element("form[phx-submit='save_title']") |> render_submit(%{title: "Updated Title"})
       
       assert html =~ "Updated Title"
       
@@ -99,7 +99,8 @@ defmodule TodoListerWeb.TodoListLiveTest do
       view |> render_hook("key_down", %{"key" => "Escape"})
       
       html = render(view)
-      refute html =~ "input"
+      # Check that we're no longer in edit mode for the title (but the add task input is still there)
+      refute html =~ "title-input"
       assert html =~ todo_list.title
     end
 
@@ -109,10 +110,37 @@ defmodule TodoListerWeb.TodoListLiveTest do
       # Enter edit mode
       view |> element("h1") |> render_click()
       
-      # Trigger blur event
-      html = view |> element("input") |> render_blur(%{value: "Blur Updated Title"})
+      # Trigger blur event on the title input specifically
+      html = view |> element("#title-input") |> render_blur(%{value: "Blur Updated Title"})
       
       assert html =~ "Blur Updated Title"
+    end
+  end
+
+  describe "Todo items functionality" do
+    test "can add new todo item with add button", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      # Click the add button
+      html = view |> element("button[phx-click='add_item']") |> render_click()
+      
+      # Should create new item with placeholder text and enter edit mode
+      assert html =~ "New task"
+    end
+
+    test "displays add task button", %{conn: conn, todo_list: todo_list} do
+      {:ok, _view, html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      assert html =~ "Add new task"
+      # Check for plus icon SVG
+      assert html =~ "M12 4v16m8-8H4"
+    end
+
+    test "shows empty state when no items", %{conn: conn, todo_list: todo_list} do
+      {:ok, _view, html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      assert html =~ "No todo items yet"
+      assert html =~ "Click the + button to add your first task!"
     end
   end
 end
