@@ -100,185 +100,148 @@ const Hooks = {
   },
   DragDrop: {
     mounted() {
+      this.draggedElement = null
+      this.placeholder = null
       this.initializeDragDrop()
     },
     
     updated() {
-      this.initializeDragDrop()
+      // Just reinitialize drag handles when DOM updates
+      this.setupDragHandles()
     },
     
     initializeDragDrop() {
       const container = this.el
-      let draggedElement = null
-      let placeholder = null
+      
+      // Prevent duplicate initialization
+      if (container._ddInitialized) return
+      container._ddInitialized = true
       
       // Add CSS for smooth transitions
-      const style = document.createElement('style')
-      style.textContent = `
-        .drag-transition {
-          transition: transform 0.2s ease, opacity 0.2s ease;
-        }
-        .drag-placeholder {
-          opacity: 0.5;
-          background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
-          border: 2px dashed #f97316;
-          min-height: 60px;
-          margin: 2px 0;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #ea580c;
-          font-size: 14px;
-        }
-        .dragging-item {
-          opacity: 0.8;
-          transform: rotate(3deg);
-          z-index: 1000;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-        }
-      `
       if (!document.querySelector('#drag-drop-styles')) {
+        const style = document.createElement('style')
         style.id = 'drag-drop-styles'
+        style.textContent = `
+          .drag-transition { transition: transform 0.2s ease, opacity 0.2s ease; }
+          .drag-placeholder {
+            opacity: 0.5; background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+            border: 2px dashed #f97316; min-height: 60px; margin: 2px 0; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center; color: #ea580c; font-size: 14px;
+          }
+          .dragging-item {
+            opacity: 0.8; transform: rotate(3deg); z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+          }
+        `
         document.head.appendChild(style)
       }
       
-      // Make items draggable only from drag handle
+      // Container-level event delegation
+      container.addEventListener('dragover', (e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        
+        const item = e.target.closest('[data-draggable]')
+        if (item && this.draggedElement && item !== this.draggedElement && this.placeholder) {
+          const rect = item.getBoundingClientRect()
+          const midY = rect.top + rect.height / 2
+          
+          if (this.placeholder.parentNode) {
+            this.placeholder.remove()
+          }
+          
+          if (e.clientY < midY) {
+            item.parentNode.insertBefore(this.placeholder, item)
+          } else {
+            item.parentNode.insertBefore(this.placeholder, item.nextSibling)
+          }
+        }
+      })
+      
+      container.addEventListener('drop', (e) => {
+        e.preventDefault()
+        
+        const item = e.target.closest('[data-draggable]')
+        
+        if (this.draggedElement && this.placeholder) {
+          const dropPosition = this.placeholder.nextSibling
+          this.placeholder.remove()
+          
+          this.draggedElement.style.display = ''
+          
+          if (dropPosition) {
+            container.insertBefore(this.draggedElement, dropPosition)
+          } else {
+            container.appendChild(this.draggedElement)
+          }
+          
+          // Calculate target for server
+          let targetElement, position
+          if (dropPosition) {
+            targetElement = dropPosition
+            position = 'before'
+          } else {
+            const allItems = Array.from(container.querySelectorAll('[data-draggable]'))
+            const draggedIndex = allItems.indexOf(this.draggedElement)
+            if (draggedIndex > 0) {
+              targetElement = allItems[draggedIndex - 1]
+              position = 'after'
+            }
+          }
+          
+          if (targetElement && targetElement.dataset.itemId) {
+            this.pushEvent("reorder_item", {
+              item_id: this.draggedElement.dataset.itemId,
+              reference_id: targetElement.dataset.itemId,
+              position: position
+            })
+          }
+        }
+      })
+      
+      this.setupDragHandles()
+    },
+    
+    setupDragHandles() {
+      const container = this.el
+      
       container.querySelectorAll('[data-draggable]').forEach(item => {
         const dragHandle = item.querySelector('[data-drag-handle]')
-        
         item.classList.add('drag-transition')
         
         if (dragHandle) {
-          // Make the drag handle itself draggable
           dragHandle.draggable = true
           
-          dragHandle.addEventListener('dragstart', (e) => {
-            draggedElement = item
+          // Remove old handlers by cloning
+          const newHandle = dragHandle.cloneNode(true)
+          dragHandle.parentNode.replaceChild(newHandle, dragHandle)
+          
+          newHandle.addEventListener('dragstart', (e) => {
+            this.draggedElement = item
             item.classList.add('dragging-item')
             
-            // Create placeholder
-            placeholder = document.createElement('div')
-            placeholder.className = 'drag-placeholder'
-            placeholder.innerHTML = '↕ Drop here'
+            this.placeholder = document.createElement('div')
+            this.placeholder.className = 'drag-placeholder'
+            this.placeholder.innerHTML = '↕ Drop here'
             
             e.dataTransfer.effectAllowed = 'move'
             e.dataTransfer.setData('text/html', item.outerHTML)
             
-            // Hide original item after drag starts
-            setTimeout(() => {
-              item.style.display = 'none'
-            }, 0)
-            
-            // Prevent the click from bubbling up to trigger edit
+            setTimeout(() => item.style.display = 'none', 0)
             e.stopPropagation()
           })
           
-          dragHandle.addEventListener('dragend', (e) => {
-            // Clean up
+          newHandle.addEventListener('dragend', (e) => {
             item.classList.remove('dragging-item')
             item.style.display = ''
             
-            if (placeholder && placeholder.parentNode) {
-              placeholder.remove()
+            if (this.placeholder && this.placeholder.parentNode) {
+              this.placeholder.remove()
             }
             
-            draggedElement = null
-            placeholder = null
+            this.draggedElement = null
+            this.placeholder = null
           })
         }
-        
-        // The drag events are now handled on the drag handle
-        
-        item.addEventListener('dragover', (e) => {
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'move'
-          
-          if (draggedElement && item !== draggedElement && placeholder) {
-            const rect = item.getBoundingClientRect()
-            const midY = rect.top + rect.height / 2
-            
-            // Remove placeholder from current position
-            if (placeholder.parentNode) {
-              placeholder.remove()
-            }
-            
-            // Insert placeholder in new position
-            if (e.clientY < midY) {
-              item.parentNode.insertBefore(placeholder, item)
-            } else {
-              item.parentNode.insertBefore(placeholder, item.nextSibling)
-            }
-          }
-        })
-        
-        item.addEventListener('drop', (e) => {
-          e.preventDefault()
-          
-          if (draggedElement && placeholder) {
-            // Move the actual element optimistically
-            const dropPosition = placeholder.nextSibling
-            placeholder.remove()
-            
-            // Insert the dragged element in the new position
-            draggedElement.style.display = ''
-            if (dropPosition) {
-              container.insertBefore(draggedElement, dropPosition)
-            } else {
-              container.appendChild(draggedElement)
-            }
-            
-            // Find target element for server update
-            let targetElement, position
-            if (dropPosition) {
-              targetElement = dropPosition
-              position = 'before'
-            } else {
-              // Dropped at the end, find the previous element
-              const allItems = Array.from(container.querySelectorAll('[data-draggable]'))
-              const draggedIndex = allItems.indexOf(draggedElement)
-              if (draggedIndex > 0) {
-                targetElement = allItems[draggedIndex - 1]
-                position = 'after'
-              }
-            }
-            
-            // Send to server
-            if (targetElement && targetElement.dataset.itemId) {
-              this.pushEvent("reorder_item", {
-                item_id: draggedElement.dataset.itemId,
-                reference_id: targetElement.dataset.itemId,
-                position: position
-              })
-            }
-          }
-        })
-        
-        // Handle container drop for empty areas
-        container.addEventListener('dragover', (e) => {
-          e.preventDefault()
-        })
-        
-        container.addEventListener('drop', (e) => {
-          if (e.target === container && draggedElement && placeholder) {
-            // Dropped in empty space, put at end
-            placeholder.remove()
-            container.appendChild(draggedElement)
-            draggedElement.style.display = ''
-            
-            // Find previous element
-            const allItems = Array.from(container.querySelectorAll('[data-draggable]'))
-            const draggedIndex = allItems.indexOf(draggedElement)
-            if (draggedIndex > 0) {
-              const prevElement = allItems[draggedIndex - 1]
-              this.pushEvent("reorder_item", {
-                item_id: draggedElement.dataset.itemId,
-                reference_id: prevElement.dataset.itemId,
-                position: 'after'
-              })
-            }
-          }
-        })
       })
     }
   }
