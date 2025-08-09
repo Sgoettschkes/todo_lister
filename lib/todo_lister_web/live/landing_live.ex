@@ -1,9 +1,22 @@
 defmodule TodoListerWeb.LandingLive do
   use TodoListerWeb, :live_view
 
+  alias TodoLister.Lists
+
   @impl true
   def mount(_params, _session, socket) do
     {:ok, socket}
+  end
+
+  @impl true
+  def handle_event("create_list", _params, socket) do
+    case Lists.create_todo_list(%{title: "New Todo List"}) do
+      {:ok, todo_list} ->
+        {:noreply, push_navigate(socket, to: ~p"/tl/#{todo_list.id}")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to create todo list")}
+    end
   end
 
   @impl true
@@ -22,7 +35,7 @@ defmodule TodoListerWeb.LandingLive do
                   Real-time collaborative todo lists powered by Phoenix LiveView
                 </p>
                 <div class="flex justify-center gap-4">
-                  <button class="btn btn-primary bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600 text-white">
+                  <button phx-click="create_list" class="btn btn-primary bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600 text-white">
                     Create New List
                   </button>
                 </div>

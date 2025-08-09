@@ -18,6 +18,7 @@ defmodule TodoListerWeb.Router do
     pipe_through :browser
 
     live "/", LandingLive, :index
+    live "/tl/:id", TodoListLive, :show
   end
 
   # Other scopes may use custom stacks.
