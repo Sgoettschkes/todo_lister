@@ -143,6 +143,55 @@ defmodule TodoListerWeb.TodoListLiveTest do
       assert render(view1) =~ "Synced Item"
       assert render(view2) =~ "Synced Item"
     end
+
+    test "preserves editing state during external updates (optimistic locking)", %{conn: conn, todo_list: todo_list} do
+      # Start two LiveView clients for the same todo list
+      {:ok, view1, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      {:ok, view2, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      # Client 1: Add and start editing an item
+      view1 |> element("button[phx-click='add_item']") |> render_click()
+      view1 |> element("form[phx-submit='save_item']") |> render_submit(%{text: "Item being edited"})
+      
+      # Client 1: Start editing the item again
+      view1 |> element("div[phx-click='edit_item']") |> render_click()
+      
+      # Client 2: Add a different item (triggers :updated message)
+      view2 |> element("button[phx-click='add_item']") |> render_click()
+      view2 |> element("form[phx-submit='save_item']") |> render_submit(%{text: "Different item"})
+      
+      # Client 1 should:
+      # 1. Show the new item from Client 2
+      # 2. Still be in edit mode for the original item
+      # 3. Show a notification about the external change
+      html1 = render(view1)
+      assert html1 =~ "Different item"
+      assert html1 =~ "Item being edited" 
+      assert html1 =~ "List updated by another user"
+      assert html1 =~ "input" # Still in edit mode
+    end
+
+    test "detects and warns about text conflicts during concurrent edits", %{conn: conn, todo_list: todo_list} do
+      # Create an item first
+      {:ok, _item} = TodoLister.Lists.create_todo_item(todo_list, %{text: "Original text"})
+      
+      # Start two LiveView clients
+      {:ok, view1, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      {:ok, view2, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      # Client 1: Start editing the item
+      view1 |> element("div[phx-click='edit_item']") |> render_click()
+      
+      # Client 2: Update the same item externally (simulating concurrent edit)
+      view2 |> element("div[phx-click='edit_item']") |> render_click()
+      view2 |> element("form[phx-submit='save_item']") |> render_submit(%{text: "Changed by client 2"})
+      
+      # Client 1 should show conflict warning and preserve their editing state
+      html1 = render(view1)
+      assert html1 =~ "Your current edit is preserved"
+      assert html1 =~ "input" # Still in edit mode
+      assert html1 =~ "Original text" # Preserves original version being edited
+    end
   end
 
   describe "Todo items functionality" do

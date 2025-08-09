@@ -277,11 +277,66 @@ defmodule TodoListerWeb.TodoListLive do
     # Reload the full todo list from database when any change occurs
     updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
     
+    # Check if user is currently editing something
+    currently_editing_title = socket.assigns.editing_title
+    currently_editing_item_id = socket.assigns.editing_item_id
+    
+    # Preserve editing state for items and apply optimistic locking
+    {updated_items, conflict_message} = if currently_editing_item_id do
+      # Find the item being edited in both current and updated state
+      current_editing_item = Enum.find(socket.assigns.todo_items, &(&1.id == currently_editing_item_id))
+      updated_editing_item = Enum.find(updated_todo_list.todo_items, &(&1.id == currently_editing_item_id))
+      
+      # Check if the item being edited was changed externally
+      conflict = current_editing_item && updated_editing_item && 
+                 current_editing_item.text != updated_editing_item.text
+      
+      preserved_items = if current_editing_item do
+        # Keep current version of editing item, update all others
+        Enum.map(updated_todo_list.todo_items, fn item ->
+          if item.id == currently_editing_item_id do
+            current_editing_item
+          else
+            item
+          end
+        end)
+      else
+        updated_todo_list.todo_items
+      end
+      
+      message = if conflict do
+        "List updated by another user. Your current edit is preserved."
+      else
+        "List updated by another user."
+      end
+      
+      {preserved_items, message}
+    else
+      {updated_todo_list.todo_items, "List updated by another user."}
+    end
+    
+    # Only show title conflict if we're not editing the title
+    title_conflict = not currently_editing_title and 
+                     socket.assigns.todo_list.title != updated_todo_list.title
+    
     socket =
       socket
       |> assign(:todo_list, updated_todo_list)
-      |> assign(:page_title, updated_todo_list.title)
-      |> assign(:todo_items, updated_todo_list.todo_items)
+      |> assign(:todo_items, updated_items)
+      
+    socket = if currently_editing_title do
+      # Preserve current title while editing
+      socket
+    else
+      assign(socket, :page_title, updated_todo_list.title)
+    end
+    
+    # Show notification about external changes
+    socket = if title_conflict or currently_editing_item_id do
+      put_flash(socket, :info, conflict_message)
+    else
+      socket
+    end
     
     {:noreply, socket}
   end
@@ -391,7 +446,8 @@ defmodule TodoListerWeb.TodoListLive do
                       "flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer",
                       item.status == :done && "bg-green-50 border-green-200",
                       item.status == :wont_do && "bg-red-50 border-red-200 opacity-75",
-                      item.status == :todo && "bg-white border-gray-200 hover:border-orange-300"
+                      item.status == :todo && "bg-white border-gray-200 hover:border-orange-300",
+                      @editing_item_id == item.id && "bg-orange-50 border-orange-300 ring-2 ring-orange-200"
                     ]}
                     phx-click="edit_item"
                     phx-value-id={item.id}>
