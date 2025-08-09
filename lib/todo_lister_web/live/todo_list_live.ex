@@ -349,85 +349,55 @@ defmodule TodoListerWeb.TodoListLive do
       <.flash :if={@flash["error"]} kind={:error} flash={@flash} />
       <div class="container mx-auto px-4 py-8">
         <div class="max-w-4xl mx-auto">
-          <!-- Header Section -->
-          <div class="card bg-base-100 shadow-xl mb-8">
+          <!-- Combined Todo List Card -->
+          <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
-              <div class="flex items-center justify-between">
-                <div class="flex-1">
+              <!-- Header with Title and Action Buttons -->
+              <div class="flex items-start justify-between mb-6">
+                <div class="flex-1 cursor-pointer" phx-click="edit_title">
                   <%= if @editing_title do %>
-                    <form phx-submit="save_title">
+                    <form phx-submit="save_title" class="w-full">
                       <input
                         type="text"
                         name="title"
                         value={@todo_list.title}
-                        class="input input-lg w-full bg-transparent border-0 text-3xl font-bold focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        class="w-full bg-transparent border-0 outline-none focus:outline-none text-3xl font-bold cursor-pointer p-0 m-0 font-inherit leading-inherit"
                         phx-keydown="key_down"
                         phx-blur="save_title"
                         phx-hook="FocusInput"
                         id="title-input"
-                        autofocus
                       />
                     </form>
                   <% else %>
-                    <h1 
-                      class="text-3xl font-bold cursor-pointer hover:text-orange-600 transition-colors"
-                      phx-click="edit_title"
-                    >
+                    <h1 class="text-3xl font-bold">
                       <%= @todo_list.title %>
-                      <span class="text-gray-400 text-lg ml-2">✏️</span>
                     </h1>
                   <% end %>
                 </div>
                 
-                <div class="flex gap-2">
+                <div class="flex items-center gap-3">
+                  <button 
+                    phx-click="add_item"
+                    class="btn btn-circle btn-primary bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600"
+                    title="Add new task"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                  </button>
                   <button 
                     phx-click="copy_share_link" 
-                    class="btn btn-outline btn-sm"
+                    class="btn btn-circle btn-primary bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600"
                     phx-hook="CopyToClipboard"
                     id="share-button"
                     data-url={url(~p"/tl/#{@todo_list.id}")}
+                    title="Share this list"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.032 4.026a9.001 9.001 0 01-7.432 0m9.032-4.026A9.001 9.001 0 0112 3c-4.474 0-8.268 3.12-9.032 7.326m0 0A9.001 9.001 0 0012 21c4.474 0 8.268-3.12 9.032-7.326" />
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
-                    Share
                   </button>
-                  <.link navigate={~p"/"} class="btn btn-ghost btn-sm">
-                    ← Back to Home
-                  </.link>
                 </div>
-              </div>
-              
-              <!-- Metadata -->
-              <div class="divider"></div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                <div>
-                  <span class="font-semibold">Created:</span>
-                  <%= Calendar.strftime(@todo_list.inserted_at, "%B %d, %Y at %I:%M %p") %>
-                </div>
-                <div>
-                  <span class="font-semibold">Last updated:</span>
-                  <%= Calendar.strftime(@todo_list.latest_updated_at, "%B %d, %Y at %I:%M %p") %>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Todo Items Section -->
-          <div class="card bg-base-100 shadow-xl">
-            <div class="card-body">
-              <!-- Add New Item Button -->
-              <div class="mb-6 flex justify-between items-center">
-                <h2 class="card-title">Todo Items</h2>
-                <button 
-                  phx-click="add_item"
-                  class="btn btn-circle btn-primary bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600"
-                  title="Add new task"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
               </div>
 
               <!-- Todo Items List -->
@@ -556,6 +526,26 @@ defmodule TodoListerWeb.TodoListLive do
                     </div>
                   <% end %>
                 <% end %>
+              </div>
+
+              <!-- Footer with Metadata and Actions -->
+              <div class="mt-8 pt-6 border-t border-gray-200">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div class="flex flex-col sm:flex-row gap-4 sm:gap-6 text-sm text-gray-600">
+                    <div>
+                      <span class="font-semibold">Created:</span>
+                      <%= Calendar.strftime(@todo_list.inserted_at, "%B %d, %Y at %I:%M %p") %>
+                    </div>
+                    <div>
+                      <span class="font-semibold">Last updated:</span>
+                      <%= Calendar.strftime(@todo_list.latest_updated_at, "%B %d, %Y at %I:%M %p") %>
+                    </div>
+                  </div>
+                  
+                  <.link navigate={~p"/"} class="btn btn-ghost btn-sm">
+                    ← Back to Home
+                  </.link>
+                </div>
               </div>
             </div>
           </div>

@@ -43,14 +43,14 @@ defmodule TodoListerWeb.TodoListLiveTest do
     test "displays share button", %{conn: conn, todo_list: todo_list} do
       {:ok, _view, html} = live(conn, ~p"/tl/#{todo_list.id}")
       
-      assert html =~ "Share"
       assert html =~ "share-button"
+      assert html =~ "Share this list"
     end
 
     test "clicking share button shows success message", %{conn: conn, todo_list: todo_list} do
       {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
       
-      html = view |> element("button", "Share") |> render_click()
+      html = view |> element("#share-button") |> render_click()
       
       assert html =~ "Link copied! Share this URL with others to collaborate."
     end
@@ -67,7 +67,7 @@ defmodule TodoListerWeb.TodoListLiveTest do
     test "can click to edit title", %{conn: conn, todo_list: todo_list} do
       {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
       
-      html = view |> element("h1") |> render_click()
+      html = view |> element("div[phx-click='edit_title']") |> render_click()
       
       assert html =~ "input"
       assert html =~ todo_list.title
@@ -77,7 +77,7 @@ defmodule TodoListerWeb.TodoListLiveTest do
       {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
       
       # Enter edit mode
-      view |> element("h1") |> render_click()
+      view |> element("div[phx-click='edit_title']") |> render_click()
       
       # Submit new title using the specific form
       html = view |> element("form[phx-submit='save_title']") |> render_submit(%{title: "Updated Title"})
@@ -93,7 +93,7 @@ defmodule TodoListerWeb.TodoListLiveTest do
       {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
       
       # Enter edit mode
-      view |> element("h1") |> render_click()
+      view |> element("div[phx-click='edit_title']") |> render_click()
       
       # Press escape to cancel
       view |> render_hook("key_down", %{"key" => "Escape"})
@@ -108,7 +108,7 @@ defmodule TodoListerWeb.TodoListLiveTest do
       {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
       
       # Enter edit mode
-      view |> element("h1") |> render_click()
+      view |> element("div[phx-click='edit_title']") |> render_click()
       
       # Trigger blur event on the title input specifically
       html = view |> element("#title-input") |> render_blur(%{value: "Blur Updated Title"})
@@ -122,12 +122,28 @@ defmodule TodoListerWeb.TodoListLiveTest do
       {:ok, view2, _html} = live(conn, ~p"/tl/#{todo_list.id}")
       
       # Update title in first client
-      view1 |> element("h1") |> render_click()
+      view1 |> element("div[phx-click='edit_title']") |> render_click()
       view1 |> element("form[phx-submit='save_title']") |> render_submit(%{title: "PubSub Updated Title"})
       
       # Verify both clients show the updated title
       assert render(view1) =~ "PubSub Updated Title"
       assert render(view2) =~ "PubSub Updated Title"
+    end
+
+    test "title editing behaves like item editing - seamless input", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      # Click to edit should show input with same styling
+      html = view |> element("div[phx-click='edit_title']") |> render_click()
+      
+      # Should show input field that looks the same as the h1
+      assert html =~ "input"
+      assert html =~ "text-3xl font-bold"
+      assert html =~ "bg-transparent border-0"
+      assert html =~ todo_list.title
+      
+      # Should have FocusInput hook for cursor positioning
+      assert html =~ "phx-hook=\"FocusInput\""
     end
 
     test "syncs todo item changes between multiple clients via PubSub", %{conn: conn, todo_list: todo_list} do
