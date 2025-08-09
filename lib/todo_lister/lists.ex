@@ -116,7 +116,7 @@ defmodule TodoLister.Lists do
   def list_todo_items(%TodoList{} = todo_list) do
     Repo.all(
       from ti in TodoItem,
-        where: ti.todo_list_id == ^todo_list.id,
+        where: ti.todo_list_id == ^todo_list.id and is_nil(ti.deleted_at),
         order_by: [asc: ti.inserted_at]
     )
   end
@@ -174,7 +174,7 @@ defmodule TodoLister.Lists do
   end
 
   @doc """
-  Deletes a todo_item.
+  Soft deletes a todo_item by setting deleted_at timestamp.
 
   ## Examples
 
@@ -186,7 +186,9 @@ defmodule TodoLister.Lists do
 
   """
   def delete_todo_item(%TodoItem{} = todo_item) do
-    Repo.delete(todo_item)
+    todo_item
+    |> TodoItem.changeset(%{deleted_at: NaiveDateTime.utc_now()})
+    |> Repo.update()
   end
 
   @doc """
@@ -214,7 +216,7 @@ defmodule TodoLister.Lists do
   def get_todo_list_with_items!(id) do
     todo_list = TodoList
     |> Repo.get!(id)
-    |> Repo.preload(:todo_items)
+    |> Repo.preload(todo_items: from(ti in TodoItem, where: is_nil(ti.deleted_at), order_by: [asc: ti.inserted_at]))
     
     # Calculate the latest updated_at from the list or any of its items
     latest_updated_at = 

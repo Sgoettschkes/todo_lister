@@ -251,5 +251,36 @@ defmodule TodoListerWeb.TodoListLiveTest do
       assert html =~ "input"
       assert html =~ "Test item"
     end
+
+    test "hard delete soft deletes item from UI but keeps it in database", %{conn: conn, todo_list: todo_list} do
+      # Create an item and mark it as won't do first
+      {:ok, item} = TodoLister.Lists.create_todo_item(todo_list, %{text: "Item to delete"})
+      {:ok, item} = TodoLister.Lists.update_todo_item(item, %{status: :wont_do})
+      
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      # First click to confirm deletion
+      view |> element("button[phx-click='confirm_hard_delete']") |> render_click()
+      
+      # Then click to actually delete
+      html = view |> element("button[phx-click='hard_delete']") |> render_click()
+      
+      # Item should no longer appear in the UI
+      refute html =~ "Item to delete"
+      
+      # But item should still exist in database with deleted_at set
+      db_item = TodoLister.Lists.get_todo_item!(item.id)
+      assert db_item.text == "Item to delete"
+      assert not is_nil(db_item.deleted_at)
+      assert db_item.status == :wont_do
+      
+      # Verify it doesn't appear in filtered queries
+      items_from_list = TodoLister.Lists.list_todo_items(todo_list)
+      refute Enum.any?(items_from_list, &(&1.id == item.id))
+      
+      # Verify get_todo_list_with_items! also excludes it
+      updated_todo_list = TodoLister.Lists.get_todo_list_with_items!(todo_list.id)
+      refute Enum.any?(updated_todo_list.todo_items, &(&1.id == item.id))
+    end
   end
 end
