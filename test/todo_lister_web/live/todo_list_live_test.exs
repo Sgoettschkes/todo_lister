@@ -151,8 +151,8 @@ defmodule TodoListerWeb.TodoListLiveTest do
       # Save the item with some text
       view |> element("form[phx-submit='save_item']") |> render_submit(%{text: "Test item"})
       
-      # Now click on the item text to edit it
-      html = view |> element("span[phx-click='edit_item']", "Test item") |> render_click()
+      # Now click on the item row to edit it
+      html = view |> element("div[phx-click='edit_item']") |> render_click()
       
       # Should show input field
       assert html =~ "input"

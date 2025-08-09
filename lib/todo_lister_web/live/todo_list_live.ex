@@ -83,8 +83,12 @@ defmodule TodoListerWeb.TodoListLive do
     # Create a new item with placeholder text and immediately put it in edit mode
     case Lists.create_todo_item(socket.assigns.todo_list, %{text: "New task"}) do
       {:ok, new_item} ->
+        # Reload the todo list to get updated latest_updated_at
+        updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
+        
         socket =
           socket
+          |> assign(:todo_list, updated_todo_list)
           |> assign(:todo_items, socket.assigns.todo_items ++ [new_item])
           |> assign(:editing_item_id, new_item.id)
 
@@ -107,12 +111,20 @@ defmodule TodoListerWeb.TodoListLive do
 
     case Lists.update_todo_item(item, %{status: new_status}) do
       {:ok, updated_item} ->
+        # Reload the todo list to get updated latest_updated_at
+        updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
+        
         updated_items = Enum.map(socket.assigns.todo_items, fn
           %{id: ^id} -> updated_item
           other -> other
         end)
 
-        {:noreply, assign(socket, :todo_items, updated_items)}
+        socket =
+          socket
+          |> assign(:todo_list, updated_todo_list)
+          |> assign(:todo_items, updated_items)
+          
+        {:noreply, socket}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Failed to update status")}
@@ -125,12 +137,20 @@ defmodule TodoListerWeb.TodoListLive do
 
     case Lists.update_todo_item(item, %{status: :wont_do}) do
       {:ok, updated_item} ->
+        # Reload the todo list to get updated latest_updated_at
+        updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
+        
         updated_items = Enum.map(socket.assigns.todo_items, fn
           %{id: ^id} -> updated_item
           other -> other
         end)
 
-        {:noreply, assign(socket, :todo_items, updated_items)}
+        socket =
+          socket
+          |> assign(:todo_list, updated_todo_list)
+          |> assign(:todo_items, updated_items)
+          
+        {:noreply, socket}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Failed to mark as won't do")}
@@ -155,10 +175,14 @@ defmodule TodoListerWeb.TodoListLive do
 
     case Lists.delete_todo_item(item) do
       {:ok, _deleted_item} ->
+        # Reload the todo list to get updated latest_updated_at
+        updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
+        
         updated_items = Enum.reject(socket.assigns.todo_items, &(&1.id == id))
         
         socket =
           socket
+          |> assign(:todo_list, updated_todo_list)
           |> assign(:todo_items, updated_items)
           |> assign(:confirming_delete_id, nil)
           |> put_flash(:info, "Item permanently deleted")
@@ -201,6 +225,9 @@ defmodule TodoListerWeb.TodoListLive do
     
     case Lists.update_todo_item(item, %{text: text}) do
       {:ok, updated_item} ->
+        # Reload the todo list to get updated latest_updated_at
+        updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
+        
         updated_items = Enum.map(socket.assigns.todo_items, fn
           %{id: ^id} -> updated_item
           other -> other
@@ -208,6 +235,7 @@ defmodule TodoListerWeb.TodoListLive do
 
         socket =
           socket
+          |> assign(:todo_list, updated_todo_list)
           |> assign(:todo_items, updated_items)
           |> assign(:editing_item_id, nil)
 
@@ -284,7 +312,7 @@ defmodule TodoListerWeb.TodoListLive do
                 </div>
                 <div>
                   <span class="font-semibold">Last updated:</span>
-                  <%= Calendar.strftime(@todo_list.updated_at, "%B %d, %Y at %I:%M %p") %>
+                  <%= Calendar.strftime(@todo_list.latest_updated_at, "%B %d, %Y at %I:%M %p") %>
                 </div>
               </div>
             </div>

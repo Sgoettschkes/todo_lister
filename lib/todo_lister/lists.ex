@@ -212,8 +212,16 @@ defmodule TodoLister.Lists do
 
   """
   def get_todo_list_with_items!(id) do
-    TodoList
+    todo_list = TodoList
     |> Repo.get!(id)
     |> Repo.preload(:todo_items)
+    
+    # Calculate the latest updated_at from the list or any of its items
+    latest_updated_at = 
+      [todo_list.updated_at | Enum.map(todo_list.todo_items, & &1.updated_at)]
+      |> Enum.max(NaiveDateTime)
+    
+    # Add the calculated latest update time to the struct
+    Map.put(todo_list, :latest_updated_at, latest_updated_at)
   end
 end
