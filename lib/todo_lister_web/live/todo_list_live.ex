@@ -17,6 +17,9 @@ defmodule TodoListerWeb.TodoListLive do
     try do
       todo_list = Lists.get_todo_list_with_items!(id)
       
+      # Extract client_id from connection params
+      client_id = get_connect_params(socket)["client_id"]
+      
       # Subscribe to PubSub updates for this todo list
       if connected?(socket) do
         Phoenix.PubSub.subscribe(TodoLister.PubSub, "todo_list:#{id}")
@@ -30,6 +33,7 @@ defmodule TodoListerWeb.TodoListLive do
         |> assign(:todo_items, todo_list.todo_items)
         |> assign(:editing_item_id, nil)
         |> assign(:confirming_delete_id, nil)
+        |> assign(:client_id, client_id)
 
       {:ok, socket}
     rescue

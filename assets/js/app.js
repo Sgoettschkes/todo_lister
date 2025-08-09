@@ -25,6 +25,24 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/todo_lister"
 import topbar from "../vendor/topbar"
 
+// Generate or retrieve client ID from localStorage
+function getOrCreateClientId() {
+  let clientId = localStorage.getItem('todo_client_id')
+  if (!clientId) {
+    // Generate a UUID v4 compatible string (same format as Ecto binary_id)
+    clientId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0
+      const v = c === 'x' ? r : (r & 0x3 | 0x8)
+      return v.toString(16)
+    })
+    localStorage.setItem('todo_client_id', clientId)
+  }
+  return clientId
+}
+
+// Make client ID available globally
+window.clientId = getOrCreateClientId()
+
 const Hooks = {
   FocusInput: {
     mounted() {
@@ -85,7 +103,7 @@ const Hooks = {
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  params: {_csrf_token: csrfToken},
+  params: {_csrf_token: csrfToken, client_id: window.clientId},
   hooks: {...colocatedHooks, ...Hooks},
 })
 
