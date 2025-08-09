@@ -142,5 +142,21 @@ defmodule TodoListerWeb.TodoListLiveTest do
       assert html =~ "No todo items yet"
       assert html =~ "Click the + button to add your first task!"
     end
+
+    test "can click on todo item text to edit", %{conn: conn, todo_list: todo_list} do
+      # First add an item
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      view |> element("button[phx-click='add_item']") |> render_click()
+      
+      # Save the item with some text
+      view |> element("form[phx-submit='save_item']") |> render_submit(%{text: "Test item"})
+      
+      # Now click on the item text to edit it
+      html = view |> element("span[phx-click='edit_item']", "Test item") |> render_click()
+      
+      # Should show input field
+      assert html =~ "input"
+      assert html =~ "Test item"
+    end
   end
 end

@@ -320,11 +320,13 @@ defmodule TodoListerWeb.TodoListLive do
                 <% else %>
                   <%= for item <- @todo_items do %>
                     <div class={[
-                      "flex items-center gap-3 p-3 rounded-lg border transition-all",
+                      "flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer",
                       item.status == :done && "bg-green-50 border-green-200",
                       item.status == :wont_do && "bg-red-50 border-red-200 opacity-75",
                       item.status == :todo && "bg-white border-gray-200 hover:border-orange-300"
-                    ]}>
+                    ]}
+                    phx-click="edit_item"
+                    phx-value-id={item.id}>
                       <!-- Checkbox/Status Toggle -->
                       <button 
                         phx-click="toggle_status" 
@@ -373,13 +375,10 @@ defmodule TodoListerWeb.TodoListLive do
                         <% else %>
                           <span 
                             class={[
-                              "cursor-pointer",
                               item.status == :todo && "text-gray-900",
                               item.status == :done && "line-through text-gray-500",
                               item.status == :wont_do && "line-through text-red-600"
                             ]}
-                            phx-click="edit_item"
-                            phx-value-id={item.id}
                           >
                             <%= item.text %>
                           </span>

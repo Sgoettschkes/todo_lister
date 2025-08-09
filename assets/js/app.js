@@ -29,7 +29,9 @@ const Hooks = {
   FocusInput: {
     mounted() {
       this.el.focus()
-      this.el.select()
+      // Place cursor at the end of the text instead of selecting all
+      const length = this.el.value.length
+      this.el.setSelectionRange(length, length)
     }
   },
   CopyToClipboard: {
