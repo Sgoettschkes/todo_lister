@@ -18,11 +18,20 @@ defmodule TodoListerWeb.TodoListLiveTest do
       assert html =~ "Last updated:"
     end
 
-    test "redirects to home when todo list doesn't exist", %{conn: conn} do
+    test "returns 404 error when todo list doesn't exist", %{conn: conn} do
       non_existent_id = Ecto.UUID.generate()
       
-      assert {:error, {:live_redirect, %{to: "/", flash: %{"error" => "Todo list not found"}}}} = 
+      assert_error_sent 404, fn ->
         live(conn, ~p"/tl/#{non_existent_id}")
+      end
+    end
+
+    test "returns 400 error when todo list ID is invalid format", %{conn: conn} do
+      invalid_id = "not-a-valid-uuid"
+      
+      assert_error_sent 400, fn ->
+        live(conn, ~p"/tl/#{invalid_id}")
+      end
     end
 
     test "displays back to home link", %{conn: conn, todo_list: todo_list} do

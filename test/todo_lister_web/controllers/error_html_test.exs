@@ -5,7 +5,10 @@ defmodule TodoListerWeb.ErrorHTMLTest do
   import Phoenix.Template, only: [render_to_string: 4]
 
   test "renders 404.html" do
-    assert render_to_string(TodoListerWeb.ErrorHTML, "404", "html", []) == "Not Found"
+    html = render_to_string(TodoListerWeb.ErrorHTML, "404", "html", [])
+    assert html =~ "Task Not Found!"
+    assert html =~ "Whoops! This task escaped our list!"
+    assert html =~ "Back to Home"
   end
 
   test "renders 500.html" do

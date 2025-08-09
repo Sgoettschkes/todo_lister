@@ -1,0 +1,127 @@
+<div class="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center p-4">
+  <div class="max-w-2xl mx-auto text-center">
+    <div class="card bg-white shadow-xl overflow-hidden">
+      <!-- Hero Image -->
+      <figure class="relative">
+        <img 
+          src="https://images.unsplash.com/photo-1586281010467-a5ae90269186?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80" 
+          alt="Overwhelmed person with sticky notes"
+          class="w-full h-64 object-cover"
+        />
+        <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+          <div class="text-center">
+            <div class="text-8xl font-bold mb-2 animate-bounce text-orange-400">404</div>
+            <div class="text-xl font-semibold text-orange-400">Task Not Found!</div>
+          </div>
+        </div>
+      </figure>
+      
+      <div class="card-body p-8">
+        <!-- Funny Todo-themed Message -->
+        <div class="mb-6">
+          <h1 class="text-3xl font-bold text-gray-900 mb-4">
+            🗒️ Whoops! This task escaped our list!
+          </h1>
+          <div class="text-lg text-gray-700 mb-4">
+            Looks like this todo list pulled a classic productivity move:
+          </div>
+          
+          <!-- Mock Todo List -->
+          <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 text-left max-w-md mx-auto">
+            <div class="font-mono text-sm space-y-2">
+              <div class="flex items-center">
+                <span class="text-green-600">✓</span>
+                <span class="ml-2 line-through text-gray-600">Find this page</span>
+              </div>
+              <div class="flex items-center">
+                <span class="text-red-600">✗</span>
+                <span class="ml-2 text-red-600">Actually exist</span>
+              </div>
+              <div class="flex items-center">
+                <span class="text-orange-600">○</span>
+                <span class="ml-2 text-gray-800">Confuse the user</span>
+              </div>
+              <div class="flex items-center">
+                <span class="text-green-600">✓</span>
+                <span class="ml-2 line-through text-gray-600">Mission accomplished</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="text-gray-700 mb-2">
+            Don't worry, we've all been there. That important todo list probably:
+          </div>
+          <div class="text-gray-600 text-sm space-y-1">
+            <div>• Got lost in the void of "I'll do it tomorrow"</div>
+            <div>• Was accidentally deleted during a cleaning spree</div>
+            <div>• Is hiding behind that other task you've been avoiding</div>
+            <div>• Evolved into a different URL (they do that sometimes)</div>
+          </div>
+        </div>
+        
+        <!-- Call to Action -->
+        <div class="space-y-4">
+          <p class="text-lg font-semibold text-orange-700">
+            🎯 Let's get you back on track!
+          </p>
+          
+          <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <.link 
+              navigate={~p"/"} 
+              class="btn btn-primary bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600 text-lg px-8"
+            >
+              🏠 Back to Home
+            </.link>
+            
+            <.link 
+              navigate={~p"/"} 
+              class="btn btn-outline btn-orange-500 hover:bg-orange-100 text-lg px-8"
+            >
+              ✨ Create New List
+            </.link>
+          </div>
+          
+          <!-- Fun Fact -->
+          <div class="mt-8 p-4 bg-orange-50 rounded-lg border border-orange-200">
+            <div class="text-sm text-orange-700">
+              <strong>🧠 Productivity Tip:</strong> Did you know that 92% of people feel more accomplished 
+              when they cross out completed tasks? Even if it's just finding this 404 page! 
+              <span class="text-orange-600">✓ Task completed!</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .btn-outline.btn-orange-500 {
+    border-color: #f97316;
+    color: #f97316;
+  }
+  .btn-outline.btn-orange-500:hover {
+    background-color: #fed7aa;
+    border-color: #f97316;
+    color: #ea580c;
+  }
+  
+  @keyframes bounce {
+    0%, 20%, 53%, 80%, 100% {
+      transform: translate3d(0,0,0);
+    }
+    40%, 43% {
+      transform: translate3d(0,-15px,0);
+    }
+    70% {
+      transform: translate3d(0,-7px,0);
+    }
+    90% {
+      transform: translate3d(0,-3px,0);
+    }
+  }
+  
+  .animate-bounce {
+    animation: bounce 2s infinite;
+  }
+</style>

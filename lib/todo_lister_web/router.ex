@@ -21,6 +21,16 @@ defmodule TodoListerWeb.Router do
     live "/tl/:id", TodoListLive, :show
   end
 
+  # Development error page testing routes
+  if Application.compile_env(:todo_lister, :dev_routes) do
+    scope "/", TodoListerWeb do
+      pipe_through :browser
+
+      get "/dev/404", PageController, :show_404
+      get "/dev/400", PageController, :show_400
+    end
+  end
+
   # Other scopes may use custom stacks.
   # scope "/api", TodoListerWeb do
   #   pipe_through :api

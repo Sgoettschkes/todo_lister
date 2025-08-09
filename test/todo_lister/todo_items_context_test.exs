@@ -149,12 +149,13 @@ defmodule TodoLister.TodoItemsContextTest do
       %{todo_list: todo_list, todo_item: todo_item}
     end
 
-    test "deletes the todo_item", %{todo_item: todo_item} do
+    test "soft deletes the todo_item", %{todo_item: todo_item} do
       assert {:ok, %TodoItem{}} = Lists.delete_todo_item(todo_item)
       
-      assert_raise Ecto.NoResultsError, fn ->
-        Lists.get_todo_item!(todo_item.id)
-      end
+      # Item still exists in database but marked as deleted
+      deleted_item = Lists.get_todo_item!(todo_item.id)
+      assert not is_nil(deleted_item.deleted_at)
+      assert deleted_item.text == todo_item.text
     end
 
     test "returns the deleted todo_item", %{todo_item: todo_item} do

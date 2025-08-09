@@ -14,32 +14,27 @@ defmodule TodoListerWeb.TodoListLive do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    try do
-      todo_list = Lists.get_todo_list_with_items!(id)
-      
-      # Extract client_id from connection params
-      client_id = get_connect_params(socket)["client_id"]
-      
-      # Subscribe to PubSub updates for this todo list
-      if connected?(socket) do
-        Phoenix.PubSub.subscribe(TodoLister.PubSub, "todo_list:#{id}")
-      end
-      
-      socket =
-        socket
-        |> assign(:todo_list, todo_list)
-        |> assign(:editing_title, false)
-        |> assign(:page_title, todo_list.title)
-        |> assign(:todo_items, todo_list.todo_items)
-        |> assign(:editing_item_id, nil)
-        |> assign(:confirming_delete_id, nil)
-        |> assign(:client_id, client_id)
-
-      {:ok, socket}
-    rescue
-      Ecto.NoResultsError ->
-        {:ok, socket |> put_flash(:error, "Todo list not found") |> push_navigate(to: ~p"/")}
+    todo_list = Lists.get_todo_list_with_items!(id)
+    
+    # Extract client_id from connection params
+    client_id = get_connect_params(socket)["client_id"]
+    
+    # Subscribe to PubSub updates for this todo list
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(TodoLister.PubSub, "todo_list:#{id}")
     end
+    
+    socket =
+      socket
+      |> assign(:todo_list, todo_list)
+      |> assign(:editing_title, false)
+      |> assign(:page_title, todo_list.title)
+      |> assign(:todo_items, todo_list.todo_items)
+      |> assign(:editing_item_id, nil)
+      |> assign(:confirming_delete_id, nil)
+      |> assign(:client_id, client_id)
+
+    {:ok, socket}
   end
 
   @impl true

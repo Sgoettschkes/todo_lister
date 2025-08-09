@@ -1,0 +1,139 @@
+<div class="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center p-4">
+  <div class="max-w-2xl mx-auto text-center">
+    <div class="card bg-white shadow-xl overflow-hidden">
+      <!-- Hero Image -->
+      <figure class="relative">
+        <img 
+          src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80" 
+          alt="Person looking confused at messy handwriting"
+          class="w-full h-64 object-cover"
+        />
+        <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+          <div class="text-center">
+            <div class="text-8xl font-bold mb-2 animate-pulse text-orange-400">400</div>
+            <div class="text-xl font-semibold text-orange-400">Task Corrupted!</div>
+          </div>
+        </div>
+      </figure>
+      
+      <div class="card-body p-8">
+        <!-- Funny Todo-themed Message -->
+        <div class="mb-6">
+          <h1 class="text-3xl font-bold text-gray-900 mb-4">
+            📝 Oops! Your handwriting is worse than ours!
+          </h1>
+          <div class="text-lg text-gray-700 mb-4">
+            Looks like this request was written in the same style as your grocery lists:
+          </div>
+          
+          <!-- Mock Messy Todo List -->
+          <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-6 text-left max-w-md mx-auto">
+            <div class="font-mono text-sm space-y-2">
+              <div class="flex items-center">
+                <span class="text-orange-600">?</span>
+                <span class="ml-2 text-gray-700 line-through" style="transform: rotate(-2deg)">~~mlik~~ milk?</span>
+              </div>
+              <div class="flex items-center">
+                <span class="text-red-600">✗</span>
+                <span class="ml-2 text-red-600" style="transform: rotate(1deg)">bread (or beard???)</span>
+              </div>
+              <div class="flex items-center">
+                <span class="text-orange-600">?</span>
+                <span class="ml-2 text-gray-800" style="transform: rotate(-1deg)">∃gg₴ (aliens?)</span>
+              </div>
+              <div class="flex items-center">
+                <span class="text-red-600">!</span>
+                <span class="ml-2 text-red-600" style="transform: rotate(1.5deg)">Invalid characters detected</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="text-gray-700 mb-2">
+            Don't worry, we've all been there. Your request probably:
+          </div>
+          <div class="text-gray-600 text-sm space-y-1">
+            <div>• Contains mysterious characters that shouldn't exist</div>
+            <div>• Was typed while multitasking (we see you, Netflix watcher)</div>
+            <div>• Got autocorrected into something completely different</div>
+            <div>• Was written by someone who thinks URLs are suggestions</div>
+            <div>• Contains emojis in places where only boring letters belong</div>
+          </div>
+        </div>
+        
+        <!-- Call to Action -->
+        <div class="space-y-4">
+          <p class="text-lg font-semibold text-orange-700">
+            🔧 Let's fix this digital disaster!
+          </p>
+          
+          <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <.link 
+              navigate={~p"/"} 
+              class="btn btn-primary bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600 text-lg px-8"
+            >
+              🏠 Back to Safety
+            </.link>
+            
+            <.link 
+              navigate={~p"/"} 
+              class="btn btn-outline btn-orange-500 hover:bg-orange-100 text-lg px-8"
+            >
+              📋 Start Fresh
+            </.link>
+          </div>
+          
+          <!-- Fun Fact -->
+          <div class="mt-8 p-4 bg-orange-50 rounded-lg border border-orange-200">
+            <div class="text-sm text-orange-700">
+              <strong>🎯 Pro Tip:</strong> URLs are like recipes - one wrong ingredient and everything falls apart! 
+              But hey, at least you found our custom error page. That's more organized than most people's bookmark folders!
+              <span class="text-orange-600">📁 Digital tidiness: 2/10</span>
+            </div>
+          </div>
+          
+          <!-- Bonus Section -->
+          <div class="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+            <div class="text-xs text-yellow-700 text-center">
+              <strong>Fun Fact:</strong> This error happens so rarely that our 400 page felt lonely. 
+              Thanks for visiting! 🎉
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .btn-outline.btn-orange-500 {
+    border-color: #f97316;
+    color: #f97316;
+  }
+  .btn-outline.btn-orange-500:hover {
+    background-color: #fed7aa;
+    border-color: #f97316;
+    color: #ea580c;
+  }
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+      transform: scale(1.05);
+    }
+  }
+  
+  .animate-pulse {
+    animation: pulse 2s infinite;
+  }
+  
+  /* Add subtle rotation to mock handwriting */
+  .font-mono .flex:nth-child(odd) {
+    transform: rotate(0.5deg);
+  }
+  .font-mono .flex:nth-child(even) {
+    transform: rotate(-0.5deg);
+  }
+</style>
