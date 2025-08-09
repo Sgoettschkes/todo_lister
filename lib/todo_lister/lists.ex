@@ -7,6 +7,7 @@ defmodule TodoLister.Lists do
   alias TodoLister.Repo
   alias TodoLister.TodoList
   alias TodoLister.TodoItem
+  alias TodoLister.History
 
   @doc """
   Returns the list of todo_lists.
@@ -44,17 +45,27 @@ defmodule TodoLister.Lists do
 
   ## Examples
 
-      iex> create_todo_list(%{field: value})
+      iex> create_todo_list(%{field: value}, client_id)
       {:ok, %TodoList{}}
 
-      iex> create_todo_list(%{field: bad_value})
+      iex> create_todo_list(%{field: bad_value}, client_id)
       {:error, %Ecto.Changeset{}}
 
   """
-  def create_todo_list(attrs \\ %{}) do
-    %TodoList{}
-    |> TodoList.changeset(attrs)
-    |> Repo.insert()
+  def create_todo_list(attrs \\ %{}, client_id \\ nil) do
+    case %TodoList{}
+         |> TodoList.changeset(attrs)
+         |> Repo.insert() do
+      {:ok, todo_list} = result ->
+        # Record history if client_id is provided
+        if client_id do
+          History.record_list_created(todo_list, client_id)
+        end
+        result
+
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -62,17 +73,29 @@ defmodule TodoLister.Lists do
 
   ## Examples
 
-      iex> update_todo_list(todo_list, %{field: new_value})
+      iex> update_todo_list(todo_list, %{field: new_value}, client_id)
       {:ok, %TodoList{}}
 
-      iex> update_todo_list(todo_list, %{field: bad_value})
+      iex> update_todo_list(todo_list, %{field: bad_value}, client_id)
       {:error, %Ecto.Changeset{}}
 
   """
-  def update_todo_list(%TodoList{} = todo_list, attrs) do
-    todo_list
-    |> TodoList.changeset(attrs)
-    |> Repo.update()
+  def update_todo_list(%TodoList{} = todo_list, attrs, client_id \\ nil) do
+    old_title = todo_list.title
+
+    case todo_list
+         |> TodoList.changeset(attrs)
+         |> Repo.update() do
+      {:ok, updated_todo_list} = result ->
+        # Record history if title changed and client_id is provided
+        if client_id && updated_todo_list.title != old_title do
+          History.record_list_title_updated(updated_todo_list, old_title, client_id)
+        end
+        result
+
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -80,17 +103,27 @@ defmodule TodoLister.Lists do
 
   ## Examples
 
-      iex> delete_todo_list(todo_list)
+      iex> delete_todo_list(todo_list, client_id)
       {:ok, %TodoList{}}
 
-      iex> delete_todo_list(todo_list)
+      iex> delete_todo_list(todo_list, client_id)
       {:error, %Ecto.Changeset{}}
 
   """
-  def delete_todo_list(%TodoList{} = todo_list) do
-    todo_list
-    |> TodoList.changeset(%{deleted_at: NaiveDateTime.utc_now()})
-    |> Repo.update()
+  def delete_todo_list(%TodoList{} = todo_list, client_id \\ nil) do
+    case todo_list
+         |> TodoList.changeset(%{deleted_at: NaiveDateTime.utc_now()})
+         |> Repo.update() do
+      {:ok, deleted_todo_list} = result ->
+        # Record history if client_id is provided
+        if client_id do
+          History.record_list_deleted(deleted_todo_list, client_id)
+        end
+        result
+
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -146,23 +179,33 @@ defmodule TodoLister.Lists do
 
   ## Examples
 
-      iex> create_todo_item(todo_list, %{field: value})
+      iex> create_todo_item(todo_list, %{field: value}, client_id)
       {:ok, %TodoItem{}}
 
-      iex> create_todo_item(todo_list, %{field: bad_value})
+      iex> create_todo_item(todo_list, %{field: bad_value}, client_id)
       {:error, %Ecto.Changeset{}}
 
   """
-  def create_todo_item(%TodoList{} = todo_list, attrs \\ %{}) do
+  def create_todo_item(%TodoList{} = todo_list, attrs \\ %{}, client_id \\ nil) do
     # Get the next order value
     next_order = get_next_order(todo_list.id)
     attrs_with_order = attrs
     |> Map.put(:todo_list_id, todo_list.id)
     |> Map.put_new(:order, next_order)
     
-    %TodoItem{}
-    |> TodoItem.changeset(attrs_with_order)
-    |> Repo.insert()
+    case %TodoItem{}
+         |> TodoItem.changeset(attrs_with_order)
+         |> Repo.insert() do
+      {:ok, todo_item} = result ->
+        # Record history if client_id is provided
+        if client_id do
+          History.record_item_created(todo_item, client_id)
+        end
+        result
+
+      error ->
+        error
+    end
   end
 
   defp get_next_order(todo_list_id) do
@@ -181,17 +224,37 @@ defmodule TodoLister.Lists do
 
   ## Examples
 
-      iex> update_todo_item(todo_item, %{field: new_value})
+      iex> update_todo_item(todo_item, %{field: new_value}, client_id)
       {:ok, %TodoItem{}}
 
-      iex> update_todo_item(todo_item, %{field: bad_value})
+      iex> update_todo_item(todo_item, %{field: bad_value}, client_id)
       {:error, %Ecto.Changeset{}}
 
   """
-  def update_todo_item(%TodoItem{} = todo_item, attrs) do
-    todo_item
-    |> TodoItem.changeset(attrs)
-    |> Repo.update()
+  def update_todo_item(%TodoItem{} = todo_item, attrs, client_id \\ nil) do
+    old_text = todo_item.text
+    old_status = todo_item.status
+
+    case todo_item
+         |> TodoItem.changeset(attrs)
+         |> Repo.update() do
+      {:ok, updated_todo_item} = result ->
+        # Record history if client_id is provided
+        if client_id do
+          # Check what changed and record appropriate history
+          if updated_todo_item.text != old_text do
+            History.record_item_text_updated(updated_todo_item, old_text, client_id)
+          end
+          
+          if updated_todo_item.status != old_status do
+            History.record_item_status_updated(updated_todo_item, old_status, client_id)
+          end
+        end
+        result
+
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -199,17 +262,27 @@ defmodule TodoLister.Lists do
 
   ## Examples
 
-      iex> delete_todo_item(todo_item)
+      iex> delete_todo_item(todo_item, client_id)
       {:ok, %TodoItem{}}
 
-      iex> delete_todo_item(todo_item)
+      iex> delete_todo_item(todo_item, client_id)
       {:error, %Ecto.Changeset{}}
 
   """
-  def delete_todo_item(%TodoItem{} = todo_item) do
-    todo_item
-    |> TodoItem.changeset(%{deleted_at: NaiveDateTime.utc_now()})
-    |> Repo.update()
+  def delete_todo_item(%TodoItem{} = todo_item, client_id \\ nil) do
+    case todo_item
+         |> TodoItem.changeset(%{deleted_at: NaiveDateTime.utc_now()})
+         |> Repo.update() do
+      {:ok, deleted_todo_item} = result ->
+        # Record history if client_id is provided
+        if client_id do
+          History.record_item_deleted(deleted_todo_item, client_id)
+        end
+        result
+
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -230,16 +303,26 @@ defmodule TodoLister.Lists do
   
   ## Examples
   
-      iex> reorder_todo_items([%{id: "1", order: 2}, %{id: "2", order: 1}])
-      :ok
+      iex> reorder_todo_items([%{id: "1", order: 2}, %{id: "2", order: 1}], todo_list_id, client_id)
+      {:ok, _}
   """
-  def reorder_todo_items(item_orders) do
-    Repo.transaction(fn ->
+  def reorder_todo_items(item_orders, todo_list_id \\ nil, client_id \\ nil) do
+    case Repo.transaction(fn ->
       Enum.each(item_orders, fn %{id: id, order: order} ->
         from(ti in TodoItem, where: ti.id == ^id)
         |> Repo.update_all(set: [order: order])
       end)
-    end)
+    end) do
+      {:ok, result} ->
+        # Record history if client_id and todo_list_id are provided
+        if client_id && todo_list_id do
+          History.record_items_reordered(todo_list_id, item_orders, client_id)
+        end
+        {:ok, result}
+
+      error ->
+        error
+    end
   end
 
   @doc """

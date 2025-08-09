@@ -55,7 +55,7 @@ defmodule TodoListerWeb.TodoListLive do
       _ -> socket.assigns.todo_list.title
     end
     
-    case Lists.update_todo_list(socket.assigns.todo_list, %{title: title}) do
+    case Lists.update_todo_list(socket.assigns.todo_list, %{title: title}, socket.assigns.client_id) do
       {:ok, updated_todo_list} ->
         broadcast_updated(updated_todo_list.id)
         
@@ -96,7 +96,7 @@ defmodule TodoListerWeb.TodoListLive do
   @impl true
   def handle_event("add_item", _params, socket) do
     # Create a new item and immediately put it in edit mode
-    case Lists.create_todo_item(socket.assigns.todo_list, %{text: "New task"}) do
+    case Lists.create_todo_item(socket.assigns.todo_list, %{text: "New task"}, socket.assigns.client_id) do
       {:ok, new_item} ->
         broadcast_updated(socket.assigns.todo_list.id)
         
@@ -126,7 +126,7 @@ defmodule TodoListerWeb.TodoListLive do
       :wont_do -> :todo
     end
 
-    case Lists.update_todo_item(item, %{status: new_status}) do
+    case Lists.update_todo_item(item, %{status: new_status}, socket.assigns.client_id) do
       {:ok, updated_item} ->
         broadcast_updated(socket.assigns.todo_list.id)
         
@@ -154,7 +154,7 @@ defmodule TodoListerWeb.TodoListLive do
   def handle_event("soft_delete", %{"id" => id}, socket) do
     item = Enum.find(socket.assigns.todo_items, &(&1.id == id))
 
-    case Lists.update_todo_item(item, %{status: :wont_do}) do
+    case Lists.update_todo_item(item, %{status: :wont_do}, socket.assigns.client_id) do
       {:ok, updated_item} ->
         broadcast_updated(socket.assigns.todo_list.id)
         
@@ -188,7 +188,7 @@ defmodule TodoListerWeb.TodoListLive do
   def handle_event("hard_delete", %{"id" => id}, socket) do
     item = Enum.find(socket.assigns.todo_items, &(&1.id == id))
 
-    case Lists.delete_todo_item(item) do
+    case Lists.delete_todo_item(item, socket.assigns.client_id) do
       {:ok, _deleted_item} ->
         broadcast_updated(socket.assigns.todo_list.id)
         
@@ -263,7 +263,7 @@ defmodule TodoListerWeb.TodoListLive do
       end
       
       # Update database
-      case Lists.reorder_todo_items(new_orders) do
+      case Lists.reorder_todo_items(new_orders, socket.assigns.todo_list.id, socket.assigns.client_id) do
         {:ok, _} ->
           broadcast_updated(socket.assigns.todo_list.id)
           
@@ -302,7 +302,7 @@ defmodule TodoListerWeb.TodoListLive do
     # If text is empty or just whitespace, provide a default
     final_text = if String.trim(text) == "", do: "New task", else: text
     
-    case Lists.update_todo_item(item, %{text: final_text}) do
+    case Lists.update_todo_item(item, %{text: final_text}, socket.assigns.client_id) do
       {:ok, updated_item} ->
         broadcast_updated(socket.assigns.todo_list.id)
         
