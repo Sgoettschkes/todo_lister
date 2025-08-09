@@ -3,12 +3,12 @@ defmodule TodoListerWeb.TodoListLive do
 
   alias TodoLister.Lists
 
-  # Helper function to broadcast updates to all clients
+  # Helper function to broadcast updates to all clients except the sender
   defp broadcast_updated(todo_list_id) do
     Phoenix.PubSub.broadcast(
       TodoLister.PubSub,
       "todo_list:#{todo_list_id}",
-      :updated
+      {:updated, self()}
     )
   end
 
@@ -96,7 +96,7 @@ defmodule TodoListerWeb.TodoListLive do
 
   @impl true
   def handle_event("add_item", _params, socket) do
-    # Create a new item with placeholder text and immediately put it in edit mode
+    # Create a new item and immediately put it in edit mode
     case Lists.create_todo_item(socket.assigns.todo_list, %{text: "New task"}) do
       {:ok, new_item} ->
         broadcast_updated(socket.assigns.todo_list.id)
@@ -181,13 +181,7 @@ defmodule TodoListerWeb.TodoListLive do
 
   @impl true
   def handle_event("confirm_hard_delete", %{"id" => id}, socket) do
-    item = Enum.find(socket.assigns.todo_items, &(&1.id == id))
-    
-    socket = 
-      socket
-      |> assign(:confirming_delete_id, id)
-      |> put_flash(:info, "Click 'Confirm Delete' again to permanently delete '#{item.text}'")
-    
+    socket = assign(socket, :confirming_delete_id, id)
     {:noreply, socket}
   end
 
@@ -247,7 +241,10 @@ defmodule TodoListerWeb.TodoListLive do
     
     item = Enum.find(socket.assigns.todo_items, &(&1.id == id))
     
-    case Lists.update_todo_item(item, %{text: text}) do
+    # If text is empty or just whitespace, provide a default
+    final_text = if String.trim(text) == "", do: "New task", else: text
+    
+    case Lists.update_todo_item(item, %{text: final_text}) do
       {:ok, updated_item} ->
         broadcast_updated(socket.assigns.todo_list.id)
         
@@ -269,6 +266,17 @@ defmodule TodoListerWeb.TodoListLive do
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Failed to update item")}
+    end
+  end
+
+  @impl true
+  def handle_info({:updated, sender_pid}, socket) do
+    if sender_pid == self() do
+      # Ignore updates from this same process to avoid showing "another user" message
+      {:noreply, socket}
+    else
+      # Handle as external update
+      handle_info(:updated, socket)
     end
   end
 

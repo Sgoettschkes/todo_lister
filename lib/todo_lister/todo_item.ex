@@ -18,7 +18,8 @@ defmodule TodoLister.TodoItem do
   def changeset(todo_item, attrs) do
     todo_item
     |> cast(attrs, [:text, :status, :todo_list_id])
-    |> validate_required([:text, :todo_list_id])
+    |> validate_required([:todo_list_id])
+    |> validate_required([:text])
     |> validate_length(:text, min: 1, max: 500)
     |> validate_inclusion(:status, [:todo, :done, :wont_do])
     |> foreign_key_constraint(:todo_list_id)

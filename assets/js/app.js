@@ -29,9 +29,15 @@ const Hooks = {
   FocusInput: {
     mounted() {
       this.el.focus()
-      // Place cursor at the end of the text instead of selecting all
-      const length = this.el.value.length
-      this.el.setSelectionRange(length, length)
+      // If the value is "New task" (default for new items), clear it and select all
+      if (this.el.value.trim() === "" || this.el.value === "New task") {
+        this.el.value = ""
+        this.el.select()
+      } else {
+        // Place cursor at the end of the text instead of selecting all
+        const length = this.el.value.length
+        this.el.setSelectionRange(length, length)
+      }
     }
   },
   CopyToClipboard: {
