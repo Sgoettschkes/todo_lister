@@ -1,7 +1,7 @@
 defmodule TodoListerWeb.TodoListLive do
   use TodoListerWeb, :live_view
 
-  alias TodoLister.Lists
+  alias TodoLister.{Lists, History}
 
   # Helper function to broadcast updates to all clients except the sender
   defp broadcast_updated(todo_list_id) do
@@ -10,6 +10,12 @@ defmodule TodoListerWeb.TodoListLive do
       "todo_list:#{todo_list_id}",
       {:updated, self()}
     )
+  end
+
+  # Helper function to reload history after changes
+  defp reload_history(socket) do
+    updated_history = History.get_list_history(socket.assigns.todo_list.id, limit: 20)
+    assign(socket, :history, updated_history)
   end
 
   @impl true
@@ -24,6 +30,9 @@ defmodule TodoListerWeb.TodoListLive do
       Phoenix.PubSub.subscribe(TodoLister.PubSub, "todo_list:#{id}")
     end
     
+    # Get history for this todo list (limit to recent 20 entries)
+    history = History.get_list_history(todo_list.id, limit: 20)
+
     socket =
       socket
       |> assign(:todo_list, todo_list)
@@ -33,6 +42,7 @@ defmodule TodoListerWeb.TodoListLive do
       |> assign(:editing_item_id, nil)
       |> assign(:confirming_delete_id, nil)
       |> assign(:client_id, client_id)
+      |> assign(:history, history)
 
     {:ok, socket}
   end
@@ -64,6 +74,7 @@ defmodule TodoListerWeb.TodoListLive do
           |> assign(:todo_list, updated_todo_list)
           |> assign(:editing_title, false)
           |> assign(:page_title, updated_todo_list.title)
+          |> reload_history()
           |> put_flash(:info, "Title updated successfully")
 
         {:noreply, socket}
@@ -108,6 +119,7 @@ defmodule TodoListerWeb.TodoListLive do
           |> assign(:todo_list, updated_todo_list)
           |> assign(:todo_items, socket.assigns.todo_items ++ [new_item])
           |> assign(:editing_item_id, new_item.id)
+          |> reload_history()
 
         {:noreply, socket}
 
@@ -142,6 +154,7 @@ defmodule TodoListerWeb.TodoListLive do
           socket
           |> assign(:todo_list, updated_todo_list)
           |> assign(:todo_items, updated_items)
+          |> reload_history()
           
         {:noreply, socket}
 
@@ -170,6 +183,7 @@ defmodule TodoListerWeb.TodoListLive do
           socket
           |> assign(:todo_list, updated_todo_list)
           |> assign(:todo_items, updated_items)
+          |> reload_history()
           
         {:noreply, socket}
 
@@ -202,6 +216,7 @@ defmodule TodoListerWeb.TodoListLive do
           |> assign(:todo_list, updated_todo_list)
           |> assign(:todo_items, updated_items)
           |> assign(:confirming_delete_id, nil)
+          |> reload_history()
           |> put_flash(:info, "Item permanently deleted")
 
         {:noreply, socket}
@@ -274,6 +289,7 @@ defmodule TodoListerWeb.TodoListLive do
             socket
             |> assign(:todo_list, updated_todo_list)
             |> assign(:todo_items, updated_todo_list.todo_items)
+            |> reload_history()
           
           {:noreply, socket}
         
@@ -319,6 +335,7 @@ defmodule TodoListerWeb.TodoListLive do
           |> assign(:todo_list, updated_todo_list)
           |> assign(:todo_items, updated_items)
           |> assign(:editing_item_id, nil)
+          |> reload_history()
 
         {:noreply, socket}
 
@@ -342,6 +359,9 @@ defmodule TodoListerWeb.TodoListLive do
   def handle_info(:updated, socket) do
     # Reload the full todo list from database when any change occurs
     updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
+    
+    # Reload history (limit to recent 20 entries)
+    updated_history = History.get_list_history(socket.assigns.todo_list.id, limit: 20)
     
     # Check if user is currently editing something
     currently_editing_title = socket.assigns.editing_title
@@ -389,6 +409,7 @@ defmodule TodoListerWeb.TodoListLive do
       socket
       |> assign(:todo_list, updated_todo_list)
       |> assign(:todo_items, updated_items)
+      |> assign(:history, updated_history)
       
     socket = if currently_editing_title do
       # Preserve current title while editing
@@ -405,6 +426,53 @@ defmodule TodoListerWeb.TodoListLive do
     end
     
     {:noreply, socket}
+  end
+
+  # Helper function to format history entries for display
+  defp format_history_entry(entry) do
+    case entry.change_type do
+      "list_created" ->
+        "List created"
+
+      "list_title_updated" ->
+        old_title = get_in(entry.old_data, ["title"])
+        new_title = get_in(entry.new_data, ["title"])
+        "List title changed from \"#{old_title}\" to \"#{new_title}\""
+
+      "list_deleted" ->
+        "List deleted"
+
+      "item_created" ->
+        text = get_in(entry.new_data, ["text"])
+        "Added task: \"#{text}\""
+
+      "item_text_updated" ->
+        old_text = get_in(entry.old_data, ["text"])
+        new_text = get_in(entry.new_data, ["text"])
+        "Task text changed from \"#{old_text}\" to \"#{new_text}\""
+
+      "item_status_updated" ->
+        old_status = get_in(entry.old_data, ["status"])
+        new_status = get_in(entry.new_data, ["status"])
+        status_text = %{
+          "todo" => "Todo",
+          "done" => "Done", 
+          "wont_do" => "Won't Do"
+        }
+        "Task status changed from #{status_text[old_status]} to #{status_text[new_status]}"
+
+      "item_deleted" ->
+        text = get_in(entry.old_data, ["text"])
+        "Deleted task: \"#{text}\""
+
+      "items_reordered" ->
+        reorder_data = get_in(entry.new_data, ["reorder_data"])
+        count = length(reorder_data || [])
+        "Reordered #{count} tasks"
+
+      _ ->
+        "Unknown change: #{entry.change_type}"
+    end
   end
 
   @impl true
@@ -634,6 +702,30 @@ defmodule TodoListerWeb.TodoListLive do
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+        
+        <!-- History Section -->
+        <div class="max-w-4xl mx-auto mt-12 mb-8">
+          <div class="bg-orange-100/60 px-6 py-6">
+            <h2 class="text-base font-normal text-gray-600 mb-4">Recent Changes</h2>
+            
+            <%= if @history == [] do %>
+              <p class="text-gray-500 text-sm">No changes yet</p>
+            <% else %>
+              <div class="space-y-1.5">
+                <%= for entry <- @history do %>
+                  <div class="text-sm text-gray-600 flex items-center justify-between py-1">
+                    <span class="text-gray-700">
+                      <%= format_history_entry(entry) %>
+                    </span>
+                    <span class="text-xs text-gray-500 ml-4 flex-shrink-0">
+                      <%= Calendar.strftime(entry.inserted_at, "%m/%d %I:%M %p") %>
+                    </span>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
           </div>
         </div>
       </div>

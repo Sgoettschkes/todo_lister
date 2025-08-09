@@ -197,8 +197,8 @@ defmodule TodoLister.Lists do
          |> TodoItem.changeset(attrs_with_order)
          |> Repo.insert() do
       {:ok, todo_item} = result ->
-        # Record history if client_id is provided
-        if client_id do
+        # Record history if client_id is provided, but not for placeholder "New task" items
+        if client_id && todo_item.text != "New task" do
           History.record_item_created(todo_item, client_id)
         end
         result
@@ -243,7 +243,12 @@ defmodule TodoLister.Lists do
         if client_id do
           # Check what changed and record appropriate history
           if updated_todo_item.text != old_text do
-            History.record_item_text_updated(updated_todo_item, old_text, client_id)
+            # Special case: if old text was "New task", this is actually creating the item
+            if old_text == "New task" do
+              History.record_item_created(updated_todo_item, client_id)
+            else
+              History.record_item_text_updated(updated_todo_item, old_text, client_id)
+            end
           end
           
           if updated_todo_item.status != old_status do
