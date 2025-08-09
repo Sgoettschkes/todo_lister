@@ -9,4 +9,3 @@ defmodule TodoListerWeb.LandingLiveTest do
     assert render(page_live) =~ "TodoLister"
   end
 end
-

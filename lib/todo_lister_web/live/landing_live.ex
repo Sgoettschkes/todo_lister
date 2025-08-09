@@ -148,4 +148,3 @@ defmodule TodoListerWeb.LandingLive do
     """
   end
 end
-
