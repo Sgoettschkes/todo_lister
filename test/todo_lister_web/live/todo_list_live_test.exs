@@ -39,6 +39,30 @@ defmodule TodoListerWeb.TodoListLiveTest do
     end
   end
 
+  describe "Share functionality" do
+    test "displays share button", %{conn: conn, todo_list: todo_list} do
+      {:ok, _view, html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      assert html =~ "Share"
+      assert html =~ "share-button"
+    end
+
+    test "clicking share button shows success message", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      html = view |> element("button", "Share") |> render_click()
+      
+      assert html =~ "Link copied! Share this URL with others to collaborate."
+    end
+
+    test "share button has correct URL in data attribute", %{conn: conn, todo_list: todo_list} do
+      {:ok, _view, html} = live(conn, ~p"/tl/#{todo_list.id}")
+      
+      expected_url = TodoListerWeb.Endpoint.url() <> "/tl/#{todo_list.id}"
+      assert html =~ "data-url=\"#{expected_url}\""
+    end
+  end
+
   describe "Title editing" do
     test "can click to edit title", %{conn: conn, todo_list: todo_list} do
       {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")

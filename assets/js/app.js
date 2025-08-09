@@ -31,6 +31,46 @@ const Hooks = {
       this.el.focus()
       this.el.select()
     }
+  },
+  CopyToClipboard: {
+    mounted() {
+      this.el.addEventListener("click", (e) => {
+        e.preventDefault()
+        const url = this.el.dataset.url
+        
+        // Try to use the modern clipboard API first
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(() => {
+            // Success is handled by the server-side event
+          }).catch(() => {
+            // Fallback to the old method
+            this.fallbackCopy(url)
+          })
+        } else {
+          // Fallback for older browsers
+          this.fallbackCopy(url)
+        }
+      })
+    },
+    
+    fallbackCopy(text) {
+      const textArea = document.createElement("textarea")
+      textArea.value = text
+      textArea.style.position = "fixed"
+      textArea.style.left = "-999999px"
+      textArea.style.top = "-999999px"
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      
+      try {
+        document.execCommand('copy')
+      } catch (err) {
+        console.error('Failed to copy: ', err)
+      }
+      
+      document.body.removeChild(textArea)
+    }
   }
 }
 

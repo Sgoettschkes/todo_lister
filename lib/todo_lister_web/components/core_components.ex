@@ -60,19 +60,22 @@ defmodule TodoListerWeb.CoreComponents do
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
+        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap shadow-lg",
+        @kind == :info && "bg-orange-100 text-orange-900 border-orange-300",
+        @kind == :error && "bg-red-100 text-red-900 border-red-300"
       ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
+        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0 text-orange-600" />
+        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0 text-red-600" />
         <div>
           <p :if={@title} class="font-semibold">{@title}</p>
           <p>{msg}</p>
         </div>
         <div class="flex-1" />
         <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+          <.icon 
+            name="hero-x-mark" 
+            class={"size-5 transition-opacity #{if @kind == :info, do: "text-orange-600 opacity-60 group-hover:opacity-100", else: "text-red-600 opacity-60 group-hover:opacity-100"}"} 
+          />
         </button>
       </div>
     </div>

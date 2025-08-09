@@ -71,9 +71,16 @@ defmodule TodoListerWeb.TodoListLive do
   end
 
   @impl true
+  def handle_event("copy_share_link", _params, socket) do
+    {:noreply, put_flash(socket, :info, "Link copied! Share this URL with others to collaborate.")}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100">
+      <.flash :if={@flash["info"]} kind={:info} flash={@flash} />
+      <.flash :if={@flash["error"]} kind={:error} flash={@flash} />
       <div class="container mx-auto px-4 py-8">
         <div class="max-w-4xl mx-auto">
           <!-- Header Section -->
@@ -107,6 +114,18 @@ defmodule TodoListerWeb.TodoListLive do
                 </div>
                 
                 <div class="flex gap-2">
+                  <button 
+                    phx-click="copy_share_link" 
+                    class="btn btn-outline btn-sm"
+                    phx-hook="CopyToClipboard"
+                    id="share-button"
+                    data-url={url(~p"/tl/#{@todo_list.id}")}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.032 4.026a9.001 9.001 0 01-7.432 0m9.032-4.026A9.001 9.001 0 0112 3c-4.474 0-8.268 3.12-9.032 7.326m0 0A9.001 9.001 0 0012 21c4.474 0 8.268-3.12 9.032-7.326" />
+                    </svg>
+                    Share
+                  </button>
                   <.link navigate={~p"/"} class="btn btn-ghost btn-sm">
                     ← Back to Home
                   </.link>
