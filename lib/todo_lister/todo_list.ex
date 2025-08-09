@@ -7,6 +7,8 @@ defmodule TodoLister.TodoList do
 
   schema "todo_lists" do
     field :title, :string
+    
+    has_many :todo_items, TodoLister.TodoItem
 
     timestamps()
   end

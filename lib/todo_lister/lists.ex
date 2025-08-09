@@ -6,6 +6,7 @@ defmodule TodoLister.Lists do
   import Ecto.Query, warn: false
   alias TodoLister.Repo
   alias TodoLister.TodoList
+  alias TodoLister.TodoItem
 
   @doc """
   Returns the list of todo_lists.
@@ -99,5 +100,120 @@ defmodule TodoLister.Lists do
   """
   def change_todo_list(%TodoList{} = todo_list, attrs \\ %{}) do
     TodoList.changeset(todo_list, attrs)
+  end
+
+  ## Todo Items
+
+  @doc """
+  Returns the list of todo_items for a given todo_list.
+
+  ## Examples
+
+      iex> list_todo_items(todo_list)
+      [%TodoItem{}, ...]
+
+  """
+  def list_todo_items(%TodoList{} = todo_list) do
+    Repo.all(
+      from ti in TodoItem,
+        where: ti.todo_list_id == ^todo_list.id,
+        order_by: [asc: ti.inserted_at]
+    )
+  end
+
+  @doc """
+  Gets a single todo_item.
+
+  Raises `Ecto.NoResultsError` if the Todo item does not exist.
+
+  ## Examples
+
+      iex> get_todo_item!(123)
+      %TodoItem{}
+
+      iex> get_todo_item!(456)
+      ** (Ecto.NoResultsError)
+
+  """
+  def get_todo_item!(id), do: Repo.get!(TodoItem, id)
+
+  @doc """
+  Creates a todo_item.
+
+  ## Examples
+
+      iex> create_todo_item(todo_list, %{field: value})
+      {:ok, %TodoItem{}}
+
+      iex> create_todo_item(todo_list, %{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def create_todo_item(%TodoList{} = todo_list, attrs \\ %{}) do
+    %TodoItem{}
+    |> TodoItem.changeset(Map.put(attrs, :todo_list_id, todo_list.id))
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates a todo_item.
+
+  ## Examples
+
+      iex> update_todo_item(todo_item, %{field: new_value})
+      {:ok, %TodoItem{}}
+
+      iex> update_todo_item(todo_item, %{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def update_todo_item(%TodoItem{} = todo_item, attrs) do
+    todo_item
+    |> TodoItem.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a todo_item.
+
+  ## Examples
+
+      iex> delete_todo_item(todo_item)
+      {:ok, %TodoItem{}}
+
+      iex> delete_todo_item(todo_item)
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def delete_todo_item(%TodoItem{} = todo_item) do
+    Repo.delete(todo_item)
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking todo_item changes.
+
+  ## Examples
+
+      iex> change_todo_item(todo_item)
+      %Ecto.Changeset{data: %TodoItem{}}
+
+  """
+  def change_todo_item(%TodoItem{} = todo_item, attrs \\ %{}) do
+    TodoItem.changeset(todo_item, attrs)
+  end
+
+  @doc """
+  Gets a todo_list with its todo_items preloaded.
+
+  ## Examples
+
+      iex> get_todo_list_with_items!(123)
+      %TodoList{todo_items: [%TodoItem{}, ...]}
+
+  """
+  def get_todo_list_with_items!(id) do
+    TodoList
+    |> Repo.get!(id)
+    |> Repo.preload(:todo_items)
   end
 end
