@@ -22,15 +22,32 @@ print_color() {
 
 # Variable to track Phoenix PID
 PHOENIX_PID=""
+# Track if we started Phoenix
+WE_STARTED_PHOENIX=false
+
+# Function to check if Phoenix is already running
+check_phoenix_running() {
+    if curl -s http://localhost:4000 > /dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
 
 # Function to start Phoenix server
 start_phoenix() {
+    # Check if Phoenix is already running
+    if check_phoenix_running; then
+        print_color "✅ Phoenix server is already running on port 4000" "$GREEN"
+        return 0
+    fi
+    
     print_color "🚀 Starting Phoenix server..." "$GREEN"
     cd "$PROJECT_DIR"
     
     # Start Phoenix in background and capture PID
     mix phx.server &
     PHOENIX_PID=$!
+    WE_STARTED_PHOENIX=true
     
     print_color "Phoenix started with PID: $PHOENIX_PID" "$YELLOW"
     
@@ -72,8 +89,11 @@ stop_phoenix() {
 
 # Function to cleanup on exit
 cleanup() {
-    print_color "\n🧹 Cleaning up..." "$YELLOW"
-    stop_phoenix
+    # Only stop Phoenix if we started it
+    if [ "$WE_STARTED_PHOENIX" = true ]; then
+        print_color "\n🧹 Cleaning up..." "$YELLOW"
+        stop_phoenix
+    fi
 }
 
 # Set trap to cleanup on script exit (success, failure, or interrupt)
