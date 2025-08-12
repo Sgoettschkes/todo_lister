@@ -68,6 +68,10 @@ export default class LiveView {
     }
   }
 
+  getCurrentParsedHTML() {
+    return this.renderer.getParsedHTML();
+  }
+
   pushClick(event, value = {}, callback = () => {}) {
     this._send("click", { event: event, value: value }, callback);
   }
@@ -131,9 +135,6 @@ export default class LiveView {
         console.log("Received async diff update");
         this.renderer.applyDiff(message.payload);
       }
-
-      // Handle other broadcast events if needed
-      console.log("Broadcast message:", message.event);
     };
   }
 }

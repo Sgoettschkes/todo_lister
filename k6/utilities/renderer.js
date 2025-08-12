@@ -32,7 +32,7 @@ export default class Renderer {
     }
 
     // Apply the diff recursively
-    const doc = parseHTML(this.html);
+    const doc = this.getParsedHTML();
     const rootElement = doc.find("[data-phx-main], [data-phx-view]").first();
 
     if (rootElement && rootElement.attr("id")) {
@@ -53,12 +53,12 @@ export default class Renderer {
    * Get the current HTML state
    * @returns {string} The current HTML
    */
-  getHTML() {
-    return this.html;
+  getParsedHTML() {
+    return parseHTML(this.html);
   }
 
   extractLiveViewMetadata() {
-    const doc = parseHTML(this.html);
+    const doc = this.getParsedHTML();
 
     // Extract CSRF token
     const csrfMeta = doc.find('meta[name="csrf-token"]');
