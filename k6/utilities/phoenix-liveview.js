@@ -1,4 +1,5 @@
 import Channel from "./phoenix-channel.js";
+import Renderer from "./renderer.js";
 import http from "k6/http";
 import { parseHTML } from "k6/html";
 import { URL } from "https://jslib.k6.io/url/1.0.0/index.js";
@@ -8,6 +9,7 @@ export default class LiveView {
     this.url = new URL(url);
     this.websocketUrl = new URL(websocketUrl);
     this.channel = null;
+    this.renderer = null;
   }
 
   connect(callback = () => {}) {
@@ -20,10 +22,11 @@ export default class LiveView {
       return;
     }
 
+    this.renderer = new Renderer(response.body);
+
     // Parse LiveView metadata from HTML
-    const { csrfToken, phxId, phxSession, phxStatic } = this._parseBody(
-      response.body,
-    );
+    const { csrfToken, phxId, phxSession, phxStatic } =
+      this.renderer.extractLiveViewMetadata();
 
     if (!csrfToken || !phxId || !phxSession || !phxStatic) {
       console.error("Missing required LiveView data");
@@ -54,7 +57,13 @@ export default class LiveView {
           _mounts: 0,
         },
       },
-      callback,
+      (message) => {
+        if (message.event === "phx_reply" && message.payload?.status === "ok") {
+          this.renderer.applyDiff(message.payload.response.rendered);
+        }
+
+        callback(message);
+      },
     );
   }
 
@@ -87,38 +96,6 @@ export default class LiveView {
     if (this.channel) {
       this._send("heartbeat", {});
     }
-  }
-
-  _parseBody(body) {
-    const doc = parseHTML(body);
-
-    // Extract CSRF token
-    const csrfMeta = doc.find('meta[name="csrf-token"]');
-    const csrfToken = csrfMeta.attr("content");
-
-    // Find the main LiveView element
-    let liveViewElement = doc.find("[data-phx-main]").first();
-
-    // If not found, try data-phx-view
-    if (!liveViewElement || !liveViewElement.attr("id")) {
-      liveViewElement = doc.find("[data-phx-view]").first();
-    }
-
-    // Extract LiveView attributes
-    const phxId = liveViewElement.attr("id");
-    const phxSession = liveViewElement.attr("data-phx-session");
-    const phxStatic = liveViewElement.attr("data-phx-static");
-
-    console.log(
-      `Parsed LiveView: id=${phxId}, session=${phxSession ? "present" : "missing"}`,
-    );
-
-    return {
-      csrfToken: csrfToken,
-      phxId: phxId,
-      phxSession: phxSession,
-      phxStatic: phxStatic,
-    };
   }
 
   _params(cookies = {}) {
