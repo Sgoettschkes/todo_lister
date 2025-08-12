@@ -44,8 +44,8 @@ start_phoenix() {
     print_color "🚀 Starting Phoenix server..." "$GREEN"
     cd "$PROJECT_DIR"
     
-    # Start Phoenix in background and capture PID
-    mix phx.server &
+    # Start Phoenix in background and capture PID, redirecting output to /dev/null
+    mix phx.server > /dev/null 2>&1 &
     PHOENIX_PID=$!
     WE_STARTED_PHOENIX=true
     
