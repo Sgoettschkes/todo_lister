@@ -38,12 +38,12 @@ export default class LiveView {
     this.websocketUrl.searchParams.append("vsn", "2.0.0");
     this.websocketUrl.searchParams.append("_csrf_token", csrfToken);
 
-    // Create channel for LiveView connection
+    // Create channel for LiveView connection with broadcast handler
     this.channel = new Channel(
       this.websocketUrl.toString(),
       `lv:${phxId}`,
       this._params(response.cookies),
-      () => {},
+      this._createBroadcastHandler(),
     );
 
     // Join the LiveView channel with exact parameters from elixir-k6
@@ -57,13 +57,7 @@ export default class LiveView {
           _mounts: 0,
         },
       },
-      (message) => {
-        if (message.event === "phx_reply" && message.payload?.status === "ok") {
-          this.renderer.applyDiff(message.payload.response.rendered);
-        }
-
-        callback(message);
-      },
+      this._wrapChannelCallback(callback),
     );
   }
 
@@ -132,7 +126,34 @@ export default class LiveView {
         event: payload.event || event,
         value: payload.value || payload,
       },
-      callback,
+      this._wrapChannelCallback(callback),
     );
+  }
+
+  _wrapChannelCallback(userCallback) {
+    return (message) => {
+      // Process channel replies internally to update renderer
+      if (message.event === "phx_reply" && message.payload?.status === "ok") {
+        if (message.payload.response?.rendered) {
+          this.renderer.applyDiff(message.payload.response.rendered);
+        }
+      }
+
+      // Pass message to user's callback
+      return userCallback(message);
+    };
+  }
+
+  _createBroadcastHandler() {
+    return (message) => {
+      // Handle async diff messages from the server
+      if (message.event === "diff" && message.payload) {
+        console.log("Received async diff update");
+        this.renderer.applyDiff(message.payload);
+      }
+      
+      // Handle other broadcast events if needed
+      console.log("Broadcast message:", message.event);
+    };
   }
 }
