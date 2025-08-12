@@ -11,9 +11,6 @@ export default class Channel {
     this.joinRef = null;
     this.socket = null;
     this.broadcastCallback = broadcastCallback;
-
-    // Append Phoenix WebSocket version
-    this.url.searchParams.append("vsn", "2.0.0");
   }
 
   join(payload, callback) {

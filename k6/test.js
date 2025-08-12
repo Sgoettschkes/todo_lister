@@ -9,38 +9,36 @@ export const options = {
 export default function () {
   const baseUrl = "http://localhost:4000";
   const websocketUrl = `${baseUrl.replace("http", "ws")}/live/websocket`;
-  const landingLiveView = new LiveView(baseUrl, websocketUrl);
+  let client1Id = getOrCreateClientId();
 
-  // Store test results
+  let liveView = new LiveView(baseUrl, websocketUrl, { client_id: client1Id });
+
   let connected = false;
-  let listCreated = false;
+  let listUrl = null;
 
-  // Connect to landing page LiveView - this will block until connection closes
-  const res = landingLiveView.connect((response) => {
+  let res = liveView.connect((response) => {
     if (response.event === "phx_reply" && response.payload?.status === "ok") {
       connected = true;
 
-      // Try to create a new todo list
-      landingLiveView.pushClick("create_list", {}, (createResponse) => {
+      liveView.pushClick("create_list", {}, (createResponse) => {
         if (
           createResponse.event === "phx_reply" &&
           createResponse.payload?.status === "ok"
         ) {
-          listCreated = true;
-        } else if (createResponse.event === "live_redirect") {
-          listCreated = true;
+          listUrl = createResponse.payload.response.live_redirect.to;
         }
 
-        landingLiveView.heartbeat();
-        landingLiveView.leave();
+        liveView.heartbeat();
+        liveView.leave();
       });
     } else {
-      landingLiveView.leave();
+      liveView.leave();
     }
   });
 
   check(res, {
-    "WebSocket handshake status is 101": (r) => r && r.status === 101,
+    "WebSocket handshake status on landing page is 101": (r) =>
+      r && r.status === 101,
   });
 
   check(
@@ -51,9 +49,48 @@ export default function () {
   );
 
   check(
-    { created: listCreated },
+    { created: listUrl !== null },
     {
       "Todo list created": (r) => r.created === true,
     },
   );
+
+  res = null;
+  connected = false;
+
+  if (listUrl) {
+    liveView = new LiveView(`${baseUrl}${listUrl}`, websocketUrl, {
+      client_id: client1Id,
+    });
+
+    res = liveView.connect((response) => {
+      if (response.event === "phx_reply" && response.payload?.status === "ok") {
+        connected = true;
+
+        liveView.leave();
+      } else {
+        liveView.leave();
+      }
+    });
+  }
+
+  check(res, {
+    "WebSocket handshake status on todo list page is 101": (r) =>
+      r && r.status === 101,
+  });
+
+  check(
+    { connected },
+    {
+      "Connected to todo list page": (r) => r.connected === true,
+    },
+  );
+}
+
+function getOrCreateClientId() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }

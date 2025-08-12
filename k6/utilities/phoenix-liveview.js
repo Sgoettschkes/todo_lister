@@ -5,9 +5,10 @@ import { parseHTML } from "k6/html";
 import { URL } from "https://jslib.k6.io/url/1.0.0/index.js";
 
 export default class LiveView {
-  constructor(url, websocketUrl = null) {
+  constructor(url, websocketUrl = null, channelParams = {}) {
     this.url = new URL(url);
     this.websocketUrl = new URL(websocketUrl);
+    this.channelParams = channelParams;
     this.channel = null;
     this.renderer = null;
   }
@@ -42,7 +43,7 @@ export default class LiveView {
     this.channel = new Channel(
       this.websocketUrl.toString(),
       `lv:${phxId}`,
-      this._params(response.cookies),
+      this.channelParams,
       this._createBroadcastHandler(),
     );
 
@@ -92,27 +93,6 @@ export default class LiveView {
     }
   }
 
-  _params(cookies = {}) {
-    return {
-      headers: {
-        Cookie: this._cookieHeaderFor(cookies),
-        Origin: this.url.origin,
-        "User-Agent": "k6-liveview-test/1.0",
-      },
-    };
-  }
-
-  _cookieHeaderFor(allCookies) {
-    let cookieHeader = "";
-    for (const [_name, cookies] of Object.entries(allCookies)) {
-      for (const cookie of cookies) {
-        if (cookieHeader) cookieHeader += "; ";
-        cookieHeader += `${cookie.name}=${cookie.value}`;
-      }
-    }
-    return cookieHeader;
-  }
-
   _send(event, payload = {}, callback = () => {}) {
     if (!this.channel) {
       console.error("Not connected to LiveView");
@@ -151,7 +131,7 @@ export default class LiveView {
         console.log("Received async diff update");
         this.renderer.applyDiff(message.payload);
       }
-      
+
       // Handle other broadcast events if needed
       console.log("Broadcast message:", message.event);
     };
