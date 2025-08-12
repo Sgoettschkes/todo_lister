@@ -89,7 +89,7 @@ export default class LiveView {
 
   heartbeat() {
     if (this.channel) {
-      this._send("heartbeat", {});
+      this.channel.sendToTopic("heartbeat", "phoenix", {});
     }
   }
 

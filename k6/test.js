@@ -67,6 +67,8 @@ export default function () {
       if (response.event === "phx_reply" && response.payload?.status === "ok") {
         connected = true;
 
+        liveView.heartbeat();
+
         liveView.leave();
       } else {
         liveView.leave();

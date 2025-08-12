@@ -23,7 +23,7 @@ export default class Channel {
         socket.on("open", () => {
           console.log("Channel WebSocket connected");
           this.joinRef = this.messageRef.toString();
-          this._send("phx_join", payload, callback);
+          this._send("phx_join", null, payload, callback);
         });
 
         socket.on("message", (response) => {
@@ -55,12 +55,16 @@ export default class Channel {
   }
 
   send(event, payload, callback = () => {}) {
-    this._send(event, payload, callback);
+    this._send(event, null, payload, callback);
+  }
+
+  sendToTopic(event, topic, payload, callback = () => {}) {
+    this._send(event, topic, payload, callback);
   }
 
   leave() {
     if (this.socket) {
-      this._send("phx_leave", {});
+      this._send("phx_leave", null, {});
       // Close immediately - setTimeout doesn't work in k6 WebSocket context
       this.socket.close();
     }
@@ -70,16 +74,18 @@ export default class Channel {
     this.broadcastCallback = callback;
   }
 
-  _send(event, payload, callback) {
+  _send(event, topic, payload, callback = () => {}) {
     if (!this.socket) {
       console.error("Cannot send, WebSocket is not connected");
       return;
     }
 
+    const targetTopic = topic || this.topic;
+
     const message = JSON.stringify([
       this.joinRef,
       this.messageRef.toString(),
-      this.topic,
+      targetTopic,
       event,
       payload,
     ]);
