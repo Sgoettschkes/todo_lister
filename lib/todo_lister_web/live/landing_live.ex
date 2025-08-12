@@ -5,12 +5,17 @@ defmodule TodoListerWeb.LandingLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, socket}
+    # Extract client_id from connection params and store in assigns
+    client_id = get_connect_params(socket)["client_id"]
+    {:ok, assign(socket, client_id: client_id)}
   end
 
   @impl true
   def handle_event("create_list", _params, socket) do
-    case Lists.create_todo_list(%{title: "New Todo List"}) do
+    # Get client_id from socket assigns
+    client_id = socket.assigns.client_id
+    
+    case Lists.create_todo_list(%{title: "New Todo List"}, client_id) do
       {:ok, todo_list} ->
         {:noreply, push_navigate(socket, to: ~p"/tl/#{todo_list.id}")}
 
