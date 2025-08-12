@@ -6,27 +6,14 @@ import { URL } from "https://jslib.k6.io/url/1.0.0/index.js";
 export default class LiveView {
   constructor(url, websocketUrl = null) {
     this.url = new URL(url);
-    
-    // If no websocket URL provided, derive it from the HTTP URL
-    if (!websocketUrl) {
-      const wsProtocol = url.startsWith("https") ? "wss" : "ws";
-      const baseUrl = url.replace(/^https?/, wsProtocol);
-      const wsBase = baseUrl.split('/').slice(0, 3).join('/');
-      websocketUrl = `${wsBase}/live/websocket`;
-    }
-    
     this.websocketUrl = new URL(websocketUrl);
     this.channel = null;
-    this.csrfToken = null;
-    this.phxId = null;
-    this.phxSession = null;
-    this.phxStatic = null;
   }
 
-  connect(callback = () => {}, getParams = null, parseBody = this._parseBody) {
+  connect(callback = () => {}) {
     // Get the initial page to extract LiveView data
-    const response = http.get(this.url.toString(), getParams);
-    
+    const response = http.get(this.url.toString());
+
     if (response.status !== 200) {
       console.error(`Failed to load page: ${response.status}`);
       callback({ status: "error", reason: "Failed to load page" });
@@ -34,8 +21,10 @@ export default class LiveView {
     }
 
     // Parse LiveView metadata from HTML
-    const { csrfToken, phxId, phxSession, phxStatic } = parseBody(response.body);
-    
+    const { csrfToken, phxId, phxSession, phxStatic } = this._parseBody(
+      response.body,
+    );
+
     if (!csrfToken || !phxId || !phxSession || !phxStatic) {
       console.error("Missing required LiveView data");
       callback({ status: "error", reason: "Missing LiveView data" });
@@ -51,7 +40,7 @@ export default class LiveView {
       this.websocketUrl.toString(),
       `lv:${phxId}`,
       this._params(response.cookies),
-      () => {}
+      () => {},
     );
 
     // Join the LiveView channel with exact parameters from elixir-k6
@@ -62,10 +51,10 @@ export default class LiveView {
         static: phxStatic,
         params: {
           _csrf_token: csrfToken,
-          _mounts: 0
-        }
+          _mounts: 0,
+        },
       },
-      callback
+      callback,
     );
   }
 
@@ -75,67 +64,55 @@ export default class LiveView {
     }
   }
 
-  // Send an event to the LiveView
-  send(event, payload = {}, callback = () => {}) {
-    if (!this.channel) {
-      console.error("Not connected to LiveView");
-      return;
-    }
-    
-    this.channel.send("event", {
-      type: event,
-      event: payload.event || event,
-      value: payload.value || payload,
-    }, callback);
+  pushClick(event, value = {}, callback = () => {}) {
+    this._send("click", { event: event, value: value }, callback);
   }
 
-  // Send a click event
-  pushEvent(event, value = {}, callback = () => {}) {
-    this.send("click", { event: event, value: value }, callback);
-  }
-
-  // Send a form submission
   pushForm(event, formData, callback = () => {}) {
-    this.send("form", { event: event, value: formData }, callback);
+    this._send("form", { event: event, value: formData }, callback);
   }
 
-  // Send a keyup event
   pushKeyup(target, key, value, callback = () => {}) {
-    this.send("keyup", {
-      event: target,
-      value: { key: key, value: value }
-    }, callback);
+    this._send(
+      "keyup",
+      {
+        event: target,
+        value: { key: key, value: value },
+      },
+      callback,
+    );
   }
 
-  // Keep the connection alive
   heartbeat() {
     if (this.channel) {
-      this.channel.heartbeat();
+      this._send("heartbeat", {});
     }
   }
 
   _parseBody(body) {
     const doc = parseHTML(body);
-    
+
     // Extract CSRF token
     const csrfMeta = doc.find('meta[name="csrf-token"]');
     const csrfToken = csrfMeta.attr("content");
-    
+
     // Find the main LiveView element
-    let liveViewElement = doc.find('[data-phx-main]').first();
-    
+    let liveViewElement = doc.find("[data-phx-main]").first();
+
     // If not found, try data-phx-view
     if (!liveViewElement || !liveViewElement.attr("id")) {
-      liveViewElement = doc.find('[data-phx-view]').first();
+      liveViewElement = doc.find("[data-phx-view]").first();
     }
-    
+
     // Extract LiveView attributes
     const phxId = liveViewElement.attr("id");
     const phxSession = liveViewElement.attr("data-phx-session");
     const phxStatic = liveViewElement.attr("data-phx-static");
-    
-    console.log(`Parsed LiveView: id=${phxId}, session=${phxSession ? 'present' : 'missing'}`);
-    
+
+    console.log(
+      `Parsed LiveView: id=${phxId}, session=${phxSession ? "present" : "missing"}`,
+    );
+
     return {
       csrfToken: csrfToken,
       phxId: phxId,
@@ -149,8 +126,8 @@ export default class LiveView {
       headers: {
         Cookie: this._cookieHeaderFor(cookies),
         Origin: this.url.origin,
-        "User-Agent": "k6-liveview-test/1.0"
-      }
+        "User-Agent": "k6-liveview-test/1.0",
+      },
     };
   }
 
@@ -163,5 +140,22 @@ export default class LiveView {
       }
     }
     return cookieHeader;
+  }
+
+  _send(event, payload = {}, callback = () => {}) {
+    if (!this.channel) {
+      console.error("Not connected to LiveView");
+      return;
+    }
+
+    this.channel.send(
+      "event",
+      {
+        type: event,
+        event: payload.event || event,
+        value: payload.value || payload,
+      },
+      callback,
+    );
   }
 }

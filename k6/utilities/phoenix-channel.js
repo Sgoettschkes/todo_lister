@@ -11,7 +11,7 @@ export default class Channel {
     this.joinRef = null;
     this.socket = null;
     this.broadcastCallback = broadcastCallback;
-    
+
     // Append Phoenix WebSocket version
     this.url.searchParams.append("vsn", "2.0.0");
   }
@@ -22,16 +22,16 @@ export default class Channel {
       this.params,
       function (socket) {
         this.socket = socket;
-        
+
         socket.on("open", () => {
           console.log("Channel WebSocket connected");
           this.joinRef = this.messageRef.toString();
           this._send("phx_join", payload, callback);
         });
-        
+
         socket.on("message", (response) => {
           const message = this._parseMessage(response);
-          
+
           if (message.ref != null) {
             const callback = this.callbacks[message.ref.toString()];
             if (callback) {
@@ -45,15 +45,15 @@ export default class Channel {
             this.broadcastCallback(message);
           }
         });
-        
+
         socket.on("error", (e) => {
           console.error("Channel WebSocket error:", e);
         });
-        
+
         socket.on("close", () => {
           console.log("Channel WebSocket closed");
         });
-      }.bind(this)
+      }.bind(this),
     );
   }
 
@@ -86,7 +86,7 @@ export default class Channel {
       event,
       payload,
     ]);
-    
+
     this.socket.send(message);
     this.callbacks[this.messageRef.toString()] = callback;
     this.messageRef += 1;
@@ -105,13 +105,6 @@ export default class Channel {
     } catch (error) {
       console.error("Failed to parse message:", error);
       return {};
-    }
-  }
-
-  // Heartbeat to keep connection alive
-  heartbeat() {
-    if (this.socket) {
-      this._send("heartbeat", {});
     }
   }
 }
