@@ -32,6 +32,7 @@ export default function () {
         }
 
         landingLiveView.heartbeat();
+        landingLiveView.leave();
       });
     } else {
       landingLiveView.leave();
