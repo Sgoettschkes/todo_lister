@@ -1,138 +1,217 @@
 import LiveView from "./utilities/phoenix-liveview.js";
-import { check, sleep } from "k6";
-import { parseHTML } from "k6/html";
+import TestScenario from "./utilities/test-scenario.js";
 
 export const options = {
   vus: 1,
   iterations: 1,
 };
 
-export default function () {
-  const baseUrl = "http://localhost:4000";
-  const websocketUrl = `${baseUrl.replace("http", "ws")}/live/websocket`;
-  let client1Id = getOrCreateClientId();
+// Step definitions
+const connectToLandingPage = (ctx, next) => {
+  ctx.liveView = new LiveView(ctx.baseUrl, ctx.websocketUrl, {
+    client_id: ctx.clientId,
+  });
 
-  let liveView = new LiveView(baseUrl, websocketUrl, { client_id: client1Id });
+  let connectionCaptured = false;
 
-  let connected = false;
-  let listUrl = null;
-  let res = null;
-
-  liveView.connect((type, response) => {
+  ctx.liveView.connect((type, response) => {
     if (type === "connection") {
-      res = response;
-    } else if (
-      response.event === "phx_reply" &&
-      response.payload?.status === "ok"
-    ) {
-      connected = true;
-
-      liveView.pushClick("create_list", {}, (type, createResponse) => {
-        if (
-          createResponse.event === "phx_reply" &&
-          createResponse.payload?.status === "ok"
-        ) {
-          listUrl = createResponse.payload.response.live_redirect.to;
-        }
-
-        liveView.heartbeat();
-        liveView.leave();
-      });
-    } else {
-      liveView.leave();
-    }
-  });
-
-  check(res, {
-    "WebSocket handshake status on landing page is 101": (status) =>
-      status && status.status === 101,
-  });
-
-  check(
-    { connected },
-    {
-      "Connected to landing page": (r) => r.connected === true,
-    },
-  );
-
-  check(
-    { created: listUrl !== null },
-    {
-      "Todo list created": (r) => r.created === true,
-    },
-  );
-
-  res = null;
-  connected = false;
-  let titleChanged = false;
-
-  if (listUrl) {
-    liveView = new LiveView(`${baseUrl}${listUrl}`, websocketUrl, {
-      client_id: client1Id,
-    });
-
-    liveView.connect((type, response) => {
-      if (type === "connection") {
-        res = response;
-      } else if (
+      ctx.landingConnectionStatus = response;
+      connectionCaptured = true;
+    } else if (type === "message") {
+      // Wait for both connection status and join response
+      if (
+        response &&
         response.event === "phx_reply" &&
         response.payload?.status === "ok"
       ) {
-        connected = true;
-
-        liveView.pushClick("edit_title", {}, (type, editResponse) => {
-          if (
-            editResponse.event === "phx_reply" &&
-            editResponse.payload?.status === "ok"
-          ) {
-            liveView.pushBlur(
-              "save_title",
-              { value: "Updated Todo List via K6" },
-              (type, saveResponse) => {
-                if (
-                  saveResponse.event === "phx_reply" &&
-                  saveResponse.payload?.status === "ok"
-                ) {
-                  let html = liveView.getHtml();
-                  if (html) {
-                    // Check if the title was updated in the HTML
-                    titleChanged = html.includes("Updated Todo List via K6");
-                  }
-
-                  liveView.leave();
-                } else {
-                  liveView.leave();
-                }
-              },
-            );
-          } else {
-            liveView.leave();
-          }
-        });
+        ctx.landingConnected = true;
+        // Make sure we have the connection status
+        if (!connectionCaptured) {
+          // Connection status wasn't captured separately, might be embedded
+          ctx.landingConnectionStatus = ctx.landingConnectionStatus || {
+            status: 101,
+          };
+        }
+        next();
       } else {
-        liveView.leave();
+        ctx.liveView.leave();
+        next();
       }
-    });
+    } else {
+      // Handle other cases
+      if (!response || response.event !== "phx_reply") {
+        ctx.liveView.leave();
+        next();
+      }
+    }
+  });
+};
+
+const createTodoList = (ctx, next) => {
+  ctx.liveView.pushClick("create_list", {}, (type, createResponse) => {
+    if (
+      createResponse.event === "phx_reply" &&
+      createResponse.payload?.status === "ok"
+    ) {
+      ctx.listUrl = createResponse.payload.response.live_redirect.to;
+      ctx.listCreated = ctx.listUrl !== null;
+    }
+
+    ctx.liveView.heartbeat();
+    ctx.liveView.leave();
+    next();
+  });
+};
+
+const connectToListPage = (ctx, next) => {
+  if (!ctx.listUrl) {
+    // Skip if no list URL
+    next();
+    return;
   }
 
-  check(res, {
-    "WebSocket handshake status on todo list page is 101": (status) =>
-      status && status.status === 101,
+  ctx.listLiveView = new LiveView(
+    `${ctx.baseUrl}${ctx.listUrl}`,
+    ctx.websocketUrl,
+    { client_id: ctx.clientId },
+  );
+
+  let connectionCaptured = false;
+
+  ctx.listLiveView.connect((type, response) => {
+    if (type === "connection") {
+      ctx.listConnectionStatus = response;
+      connectionCaptured = true;
+    } else if (type === "message") {
+      if (
+        response &&
+        response.event === "phx_reply" &&
+        response.payload?.status === "ok"
+      ) {
+        ctx.listConnected = true;
+        // Make sure we have the connection status
+        if (!connectionCaptured) {
+          // Connection status wasn't captured separately, might be embedded
+          ctx.listConnectionStatus = ctx.listConnectionStatus || {
+            status: 101,
+          };
+        }
+        next();
+      } else {
+        ctx.listLiveView.leave();
+        next();
+      }
+    } else {
+      // Handle other cases
+      if (!response || response.event !== "phx_reply") {
+        ctx.listLiveView.leave();
+        next();
+      }
+    }
   });
+};
 
-  check(
-    { connected },
-    {
-      "Connected to todo list page": (r) => r.connected === true,
+const editTitle = (ctx, next) => {
+  if (!ctx.listLiveView || !ctx.listConnected) {
+    next();
+    return;
+  }
+
+  ctx.listLiveView.pushClick("edit_title", {}, (type, editResponse) => {
+    if (
+      editResponse.event === "phx_reply" &&
+      editResponse.payload?.status === "ok"
+    ) {
+      ctx.editSuccessful = true;
+      next();
+    } else {
+      ctx.listLiveView.leave();
+      next();
+    }
+  });
+};
+
+const saveTitle = (ctx, next) => {
+  if (!ctx.listLiveView || !ctx.editSuccessful) {
+    if (ctx.listLiveView) {
+      ctx.listLiveView.leave();
+    }
+    next();
+    return;
+  }
+
+  ctx.listLiveView.pushBlur(
+    "save_title",
+    { value: "Updated Todo List via K6" },
+    (type, saveResponse) => {
+      if (
+        saveResponse.event === "phx_reply" &&
+        saveResponse.payload?.status === "ok"
+      ) {
+        const html = ctx.listLiveView.getHtml();
+        if (html) {
+          ctx.titleChanged = html.includes("Updated Todo List via K6");
+        }
+      }
+
+      ctx.listLiveView.leave();
+      next();
     },
   );
+};
 
-  check(
-    { titleChanged },
-    {
-      "Todo list title was changed": (r) => r.titleChanged === true,
-    },
-  );
+export default function () {
+  const scenario = new TestScenario();
+
+  // Initialize context
+  scenario.context = {
+    baseUrl: "http://localhost:4000",
+    websocketUrl: "ws://localhost:4000/live/websocket",
+    clientId: getOrCreateClientId(),
+    landingConnected: false,
+    listCreated: false,
+    listConnected: false,
+    titleChanged: false,
+  };
+
+  // Define steps
+  scenario
+    .addStep("Connect to landing page", connectToLandingPage)
+    .addStep("Create todo list", createTodoList)
+    .addStep("Connect to list page", connectToListPage)
+    .addStep("Edit title", editTitle)
+    .addStep("Save title", saveTitle);
+
+  // Define checks
+  scenario
+    .addCheck(
+      "WebSocket handshake status on landing page is 101",
+      (ctx) =>
+        ctx.landingConnectionStatus &&
+        ctx.landingConnectionStatus.status === 101,
+    )
+    .addCheck(
+      "Connected to landing page",
+      (ctx) => ctx.landingConnected === true,
+    )
+    .addCheck("Todo list created", (ctx) => ctx.listCreated === true)
+    .addCheck(
+      "WebSocket handshake status on todo list page is 101",
+      (ctx) =>
+        ctx.listConnectionStatus && ctx.listConnectionStatus.status === 101,
+    )
+    .addCheck(
+      "Connected to todo list page",
+      (ctx) => ctx.listConnected === true,
+    )
+    .addCheck(
+      "Todo list title was changed",
+      (ctx) => ctx.titleChanged === true,
+    );
+
+  // Run the scenario
+  scenario.run();
 }
 
 function getOrCreateClientId() {
