@@ -1,5 +1,6 @@
 import LiveView from "./utilities/phoenix-liveview.js";
 import TestScenario from "./utilities/test-scenario.js";
+import { parseHTML } from "k6/html";
 
 export const options = {
   vus: 1,
@@ -99,9 +100,10 @@ const saveTitle = (ctx, next) => {
     (type, response) => {
       if (type === "message") {
         const html = ctx.listLiveView.getHtml();
-        if (html) {
-          ctx.titleChanged = html.includes("Updated Todo List via K6");
-        }
+        ctx.titleChanged = parseHTML(html)
+          .find("h1")
+          .text()
+          .includes("Updated Todo List via K6");
       }
 
       next();
@@ -118,9 +120,9 @@ const addFirstTodoListItem = (ctx, next) => {
   ctx.listLiveView.pushClick("add_item", {}, (type, response) => {
     if (type === "message") {
       const html = ctx.listLiveView.getHtml();
-      if (html) {
-        ctx.addFirstTodoListItem = html.includes("New task");
-      }
+      ctx.addFirstTodoListItem =
+        parseHTML(html).find('input[value="New task"]').attr("value") ===
+        "New task";
     }
 
     next();
