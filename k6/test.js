@@ -1,5 +1,6 @@
 import LiveView from "./utilities/phoenix-liveview.js";
 import { check, sleep } from "k6";
+import { parseHTML } from "k6/html";
 
 export const options = {
   vus: 1,
@@ -57,6 +58,7 @@ export default function () {
 
   res = null;
   connected = false;
+  let titleChanged = false;
 
   if (listUrl) {
     liveView = new LiveView(`${baseUrl}${listUrl}`, websocketUrl, {
@@ -67,9 +69,35 @@ export default function () {
       if (response.event === "phx_reply" && response.payload?.status === "ok") {
         connected = true;
 
-        liveView.heartbeat();
+        liveView.pushClick("edit_title", {}, (editResponse) => {
+          if (
+            editResponse.event === "phx_reply" &&
+            editResponse.payload?.status === "ok"
+          ) {
+            liveView.pushBlur(
+              "save_title",
+              { value: "Updated Todo List via K6" },
+              (saveResponse) => {
+                if (
+                  saveResponse.event === "phx_reply" &&
+                  saveResponse.payload?.status === "ok"
+                ) {
+                  let html = liveView.getHtml();
+                  if (html) {
+                    // Check if the title was updated in the HTML
+                    titleChanged = html.includes("Updated Todo List via K6");
+                  }
 
-        liveView.leave();
+                  liveView.leave();
+                } else {
+                  liveView.leave();
+                }
+              },
+            );
+          } else {
+            liveView.leave();
+          }
+        });
       } else {
         liveView.leave();
       }
@@ -85,6 +113,13 @@ export default function () {
     { connected },
     {
       "Connected to todo list page": (r) => r.connected === true,
+    },
+  );
+
+  check(
+    { titleChanged },
+    {
+      "Todo list title was changed": (r) => r.titleChanged === true,
     },
   );
 }

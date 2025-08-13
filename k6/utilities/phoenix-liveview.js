@@ -1,5 +1,5 @@
 import Channel from "./phoenix-channel.js";
-import Renderer from "./renderer.js";
+import Rendered from "./rendered.js";
 import http from "k6/http";
 import { parseHTML } from "k6/html";
 import { URL } from "https://jslib.k6.io/url/1.0.0/index.js";
@@ -10,7 +10,7 @@ export default class LiveView {
     this.websocketUrl = new URL(websocketUrl);
     this.channelParams = channelParams;
     this.channel = null;
-    this.renderer = null;
+    this.rendered = null;
   }
 
   connect(callback = () => {}) {
@@ -23,11 +23,12 @@ export default class LiveView {
       return;
     }
 
-    this.renderer = new Renderer(response.body);
+    // Initialize the renderer with the initial HTML
+    this.rendered = new Rendered(response.body);
 
     // Parse LiveView metadata from HTML
     const { csrfToken, phxId, phxSession, phxStatic } =
-      this.renderer.extractLiveViewMetadata();
+      this._extractLiveViewMetadata(response.body);
 
     if (!csrfToken || !phxId || !phxSession || !phxStatic) {
       console.error("Missing required LiveView data");
@@ -68,16 +69,16 @@ export default class LiveView {
     }
   }
 
-  getCurrentParsedHTML() {
-    return this.renderer.getParsedHTML();
-  }
-
   pushClick(event, value = {}, callback = () => {}) {
     this._send("click", { event: event, value: value }, callback);
   }
 
   pushForm(event, formData, callback = () => {}) {
     this._send("form", { event: event, value: formData }, callback);
+  }
+
+  pushBlur(event, value, callback = () => {}) {
+    this._send("blur", { event: event, value: value }, callback);
   }
 
   pushKeyup(target, key, value, callback = () => {}) {
@@ -95,6 +96,43 @@ export default class LiveView {
     if (this.channel) {
       this.channel.sendToTopic("heartbeat", "phoenix", {});
     }
+  }
+
+  getHtml() {
+    // Return the current HTML from the renderer
+    return this.rendered ? this.rendered.getCurrentHTML() : null;
+  }
+
+  _extractLiveViewMetadata(html) {
+    const doc = parseHTML(html);
+
+    // Extract CSRF token
+    const csrfMeta = doc.find('meta[name="csrf-token"]');
+    const csrfToken = csrfMeta.attr("content");
+
+    // Find the main LiveView element
+    let liveViewElement = doc.find("[data-phx-main]").first();
+
+    // If not found, try data-phx-view
+    if (!liveViewElement || !liveViewElement.attr("id")) {
+      liveViewElement = doc.find("[data-phx-view]").first();
+    }
+
+    // Extract LiveView attributes
+    const phxId = liveViewElement.attr("id");
+    const phxSession = liveViewElement.attr("data-phx-session");
+    const phxStatic = liveViewElement.attr("data-phx-static");
+
+    console.log(
+      `Parsed LiveView: id=${phxId}, session=${phxSession ? "present" : "missing"}`,
+    );
+
+    return {
+      csrfToken: csrfToken,
+      phxId: phxId,
+      phxSession: phxSession,
+      phxStatic: phxStatic,
+    };
   }
 
   _send(event, payload = {}, callback = () => {}) {
@@ -116,24 +154,31 @@ export default class LiveView {
 
   _wrapChannelCallback(userCallback) {
     return (message) => {
-      // Process channel replies internally to update renderer
       if (message.event === "phx_reply" && message.payload?.status === "ok") {
         if (message.payload.response?.rendered) {
-          this.renderer.applyDiff(message.payload.response.rendered);
+          // Apply the rendered response to update the HTML
+          if (this.rendered) {
+            this.rendered.applyRendered(message.payload.response.rendered);
+          }
+        } else if (message.payload.response?.diff) {
+          // Apply the diff to update the HTML
+          if (this.rendered) {
+            this.rendered.applyDiff(message.payload.response.diff);
+          }
         }
       }
 
-      // Pass message to user's callback
       return userCallback(message);
     };
   }
 
   _createBroadcastHandler() {
     return (message) => {
-      // Handle async diff messages from the server
       if (message.event === "diff" && message.payload) {
-        console.log("Received async diff update");
-        this.renderer.applyDiff(message.payload);
+        // Apply broadcast diff to update the HTML
+        if (this.rendered) {
+          this.rendered.applyDiff(message.payload);
+        }
       }
     };
   }
