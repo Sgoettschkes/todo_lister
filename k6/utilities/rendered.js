@@ -75,14 +75,79 @@ export default class Rendered {
       this.mergeComponents(diff);
     }
 
+    // Phoenix LiveView template resolution: if diff contains templates, resolve them first
+    let processedDiff = diff;
+    if (diff[TEMPLATES]) {
+      processedDiff = this.resolveTemplatesInDiff(diff);
+    }
+
     // Merge the diff into our rendered state
-    this.rendered = this.mutableMerge(this.rendered, diff);
+    this.rendered = this.mutableMerge(this.rendered, processedDiff);
 
     // Re-render the HTML from the updated tree
     this.currentHTML = this.toHTML(this.rendered);
 
     this.updateFullDocument();
     return this.getFullHTML();
+  }
+
+  /**
+   * Resolve templates in diff - implementation based on Phoenix.LiveViewTest.Diff.resolve_templates
+   */
+  resolveTemplatesInDiff(diff) {
+    if (!diff[TEMPLATES]) {
+      return diff;
+    }
+
+    const template = diff[TEMPLATES];
+    const processedDiff = { ...diff };
+    delete processedDiff[TEMPLATES];
+
+    return this.resolveTemplates(processedDiff, template);
+  }
+
+  /**
+   * Recursively resolve templates in rendered content
+   */
+  resolveTemplates(rendered, template) {
+    if (!rendered || !template) {
+      return rendered;
+    }
+
+    // Handle template reference in rendered content
+    if (rendered[TEMPLATES]) {
+      const nestedTemplate = rendered[TEMPLATES];
+      const withoutTemplate = { ...rendered };
+      delete withoutTemplate[TEMPLATES];
+      return this.resolveTemplates(withoutTemplate, nestedTemplate);
+    }
+
+    // Handle static template reference
+    if (rendered[STATIC] !== undefined && typeof rendered[STATIC] === "number") {
+      const resolvedStatic = template[rendered[STATIC]];
+      if (resolvedStatic !== undefined) {
+        const resolved = { ...rendered };
+        resolved[STATIC] = resolvedStatic;
+        return this.resolveTemplates(resolved, template);
+      }
+    }
+
+    // Handle object - recursively resolve all properties
+    if (this.isObject(rendered)) {
+      const resolved = {};
+      for (const [key, value] of Object.entries(rendered)) {
+        resolved[key] = this.resolveTemplates(value, template);
+      }
+      return resolved;
+    }
+
+    // Handle arrays
+    if (Array.isArray(rendered)) {
+      return rendered.map(item => this.resolveTemplates(item, template));
+    }
+
+    // Return primitive values as-is
+    return rendered;
   }
 
   /**
@@ -166,6 +231,20 @@ export default class Rendered {
       return templates && templates[rendered] ? templates[rendered] : "";
     }
 
+    // Handle keyed content (comprehensions)
+    if (rendered[KEYED]) {
+      let html = "";
+      const keyedObj = rendered[KEYED];
+      const count = keyedObj[KEYED_COUNT] || 0;
+
+      for (let i = 0; i < count; i++) {
+        if (keyedObj[i]) {
+          html += this.toHTML(keyedObj[i], templates);
+        }
+      }
+      return html;
+    }
+
     // Handle static reference
     if (rendered[STATIC] !== undefined) {
       if (typeof rendered[STATIC] === "string") {
@@ -183,21 +262,15 @@ export default class Rendered {
       if (this.hasNumericKeys(rendered)) {
         return this.processNumericObject(rendered, templates);
       }
-      return this.toHTML(rendered[STATIC], templates);
-    }
-
-    // Handle keyed content (comprehensions)
-    if (rendered[KEYED]) {
-      let html = "";
-      const keyedObj = rendered[KEYED];
-      const count = keyedObj[KEYED_COUNT] || 0;
-
-      for (let i = 0; i < count; i++) {
-        if (keyedObj[i]) {
-          html += this.toHTML(keyedObj[i], templates);
+      
+      // Check if any numeric key has keyed content before processing static only
+      for (const key in rendered) {
+        if (/^\d+$/.test(key) && rendered[key] && rendered[key][KEYED]) {
+          return this.processNumericObject(rendered, templates);
         }
       }
-      return html;
+      
+      return this.toHTML(rendered[STATIC], templates);
     }
 
     // Handle arrays

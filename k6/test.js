@@ -109,6 +109,24 @@ const saveTitle = (ctx, next) => {
   );
 };
 
+const addFirstTodoListItem = (ctx, next) => {
+  if (!ctx.listLiveView || !ctx.editSuccessful) {
+    next();
+    return;
+  }
+
+  ctx.listLiveView.pushClick("add_item", {}, (type, response) => {
+    if (type === "message") {
+      const html = ctx.listLiveView.getHtml();
+      if (html) {
+        ctx.addFirstTodoListItem = html.includes("New task");
+      }
+    }
+
+    next();
+  });
+};
+
 const leaveListPage = createLeaveLiveViewStep({
   liveViewKey: "listLiveView",
 });
@@ -125,6 +143,7 @@ export default function () {
     listCreated: false,
     listConnected: false,
     titleChanged: false,
+    addFirstTodoListItem: false,
   };
 
   // Define steps
@@ -135,6 +154,7 @@ export default function () {
     .addStep("Connect to list page", connectToListPage)
     .addStep("Edit title", editTitle)
     .addStep("Save title", saveTitle)
+    .addStep("Add first todo list item", addFirstTodoListItem)
     .addStep("Leave list page", leaveListPage);
 
   // Define checks
@@ -148,9 +168,10 @@ export default function () {
       "Connected to todo list page",
       (ctx) => ctx.listConnected === true,
     )
+    .addCheck("Todo list title was changed", (ctx) => ctx.titleChanged === true)
     .addCheck(
-      "Todo list title was changed",
-      (ctx) => ctx.titleChanged === true,
+      "First Todo List Item was added",
+      (ctx) => ctx.addFirstTodoListItem === true,
     );
 
   // Run the scenario
