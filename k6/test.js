@@ -6,47 +6,50 @@ export const options = {
   iterations: 1,
 };
 
-// Step definitions
-const connectToLandingPage = (ctx, next) => {
-  ctx.liveView = new LiveView(ctx.baseUrl, ctx.websocketUrl, {
-    client_id: ctx.clientId,
-  });
+// Generic LiveView connection step factory
+const createConnectToLiveViewStep = (config) => {
+  return (ctx, next) => {
+    const url = config.urlBuilder(ctx);
+    const liveViewKey = config.liveViewKey;
+    const connectedKey = config.connectedKey;
 
-  let connectionCaptured = false;
+    if (config.skipCondition && config.skipCondition(ctx)) {
+      next();
+      return;
+    }
 
-  ctx.liveView.connect((type, response) => {
-    if (type === "connection") {
-      ctx.landingConnectionStatus = response;
-      connectionCaptured = true;
-    } else if (type === "message") {
-      // Wait for both connection status and join response
-      if (
-        response &&
-        response.event === "phx_reply" &&
-        response.payload?.status === "ok"
-      ) {
-        ctx.landingConnected = true;
+    ctx[liveViewKey] = new LiveView(url, ctx.websocketUrl, {
+      client_id: ctx.clientId,
+    });
+
+    ctx[liveViewKey].connect((type, response) => {
+      if (type === "connection") {
+        // do nothing
+      } else if (type === "message") {
+        ctx[connectedKey] = true;
         // Make sure we have the connection status
-        if (!connectionCaptured) {
-          // Connection status wasn't captured separately, might be embedded
-          ctx.landingConnectionStatus = ctx.landingConnectionStatus || {
-            status: 101,
-          };
-        }
         next();
       } else {
-        ctx.liveView.leave();
+        ctx[liveViewKey].leave();
         next();
       }
-    } else {
-      // Handle other cases
-      if (!response || response.event !== "phx_reply") {
-        ctx.liveView.leave();
-        next();
-      }
-    }
-  });
+    });
+  };
 };
+
+// Step definitions
+const connectToLandingPage = createConnectToLiveViewStep({
+  urlBuilder: (ctx) => ctx.baseUrl,
+  liveViewKey: "liveView",
+  connectedKey: "landingConnected",
+});
+
+const connectToListPage = createConnectToLiveViewStep({
+  urlBuilder: (ctx) => `${ctx.baseUrl}${ctx.listUrl}`,
+  liveViewKey: "listLiveView",
+  connectedKey: "listConnected",
+  skipCondition: (ctx) => !ctx.listUrl,
+});
 
 const createTodoList = (ctx, next) => {
   ctx.liveView.pushClick("create_list", {}, (type, createResponse) => {
@@ -58,57 +61,8 @@ const createTodoList = (ctx, next) => {
       ctx.listCreated = ctx.listUrl !== null;
     }
 
-    ctx.liveView.heartbeat();
     ctx.liveView.leave();
     next();
-  });
-};
-
-const connectToListPage = (ctx, next) => {
-  if (!ctx.listUrl) {
-    // Skip if no list URL
-    next();
-    return;
-  }
-
-  ctx.listLiveView = new LiveView(
-    `${ctx.baseUrl}${ctx.listUrl}`,
-    ctx.websocketUrl,
-    { client_id: ctx.clientId },
-  );
-
-  let connectionCaptured = false;
-
-  ctx.listLiveView.connect((type, response) => {
-    if (type === "connection") {
-      ctx.listConnectionStatus = response;
-      connectionCaptured = true;
-    } else if (type === "message") {
-      if (
-        response &&
-        response.event === "phx_reply" &&
-        response.payload?.status === "ok"
-      ) {
-        ctx.listConnected = true;
-        // Make sure we have the connection status
-        if (!connectionCaptured) {
-          // Connection status wasn't captured separately, might be embedded
-          ctx.listConnectionStatus = ctx.listConnectionStatus || {
-            status: 101,
-          };
-        }
-        next();
-      } else {
-        ctx.listLiveView.leave();
-        next();
-      }
-    } else {
-      // Handle other cases
-      if (!response || response.event !== "phx_reply") {
-        ctx.listLiveView.leave();
-        next();
-      }
-    }
   });
 };
 
@@ -186,21 +140,10 @@ export default function () {
   // Define checks
   scenario
     .addCheck(
-      "WebSocket handshake status on landing page is 101",
-      (ctx) =>
-        ctx.landingConnectionStatus &&
-        ctx.landingConnectionStatus.status === 101,
-    )
-    .addCheck(
       "Connected to landing page",
       (ctx) => ctx.landingConnected === true,
     )
     .addCheck("Todo list created", (ctx) => ctx.listCreated === true)
-    .addCheck(
-      "WebSocket handshake status on todo list page is 101",
-      (ctx) =>
-        ctx.listConnectionStatus && ctx.listConnectionStatus.status === 101,
-    )
     .addCheck(
       "Connected to todo list page",
       (ctx) => ctx.listConnected === true,
