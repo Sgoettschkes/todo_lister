@@ -16,12 +16,18 @@ export default function () {
 
   let connected = false;
   let listUrl = null;
+  let res = null;
 
-  let res = liveView.connect((response) => {
-    if (response.event === "phx_reply" && response.payload?.status === "ok") {
+  liveView.connect((type, response) => {
+    if (type === "connection") {
+      res = response;
+    } else if (
+      response.event === "phx_reply" &&
+      response.payload?.status === "ok"
+    ) {
       connected = true;
 
-      liveView.pushClick("create_list", {}, (createResponse) => {
+      liveView.pushClick("create_list", {}, (type, createResponse) => {
         if (
           createResponse.event === "phx_reply" &&
           createResponse.payload?.status === "ok"
@@ -38,8 +44,8 @@ export default function () {
   });
 
   check(res, {
-    "WebSocket handshake status on landing page is 101": (r) =>
-      r && r.status === 101,
+    "WebSocket handshake status on landing page is 101": (status) =>
+      status && status.status === 101,
   });
 
   check(
@@ -65,11 +71,16 @@ export default function () {
       client_id: client1Id,
     });
 
-    res = liveView.connect((response) => {
-      if (response.event === "phx_reply" && response.payload?.status === "ok") {
+    liveView.connect((type, response) => {
+      if (type === "connection") {
+        res = response;
+      } else if (
+        response.event === "phx_reply" &&
+        response.payload?.status === "ok"
+      ) {
         connected = true;
 
-        liveView.pushClick("edit_title", {}, (editResponse) => {
+        liveView.pushClick("edit_title", {}, (type, editResponse) => {
           if (
             editResponse.event === "phx_reply" &&
             editResponse.payload?.status === "ok"
@@ -77,7 +88,7 @@ export default function () {
             liveView.pushBlur(
               "save_title",
               { value: "Updated Todo List via K6" },
-              (saveResponse) => {
+              (type, saveResponse) => {
                 if (
                   saveResponse.event === "phx_reply" &&
                   saveResponse.payload?.status === "ok"
@@ -105,8 +116,8 @@ export default function () {
   }
 
   check(res, {
-    "WebSocket handshake status on todo list page is 101": (r) =>
-      r && r.status === 101,
+    "WebSocket handshake status on todo list page is 101": (status) =>
+      status && status.status === 101,
   });
 
   check(

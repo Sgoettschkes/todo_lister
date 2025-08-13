@@ -14,14 +14,13 @@ export default class Channel {
   }
 
   join(payload, callback) {
-    return ws.connect(
+    const connectResult = ws.connect(
       this.url.toString(),
       this.params,
       function (socket) {
         this.socket = socket;
 
         socket.on("open", () => {
-          console.log("Channel WebSocket connected");
           this.joinRef = this.messageRef.toString();
           this._send("phx_join", null, payload, callback);
         });
@@ -32,26 +31,27 @@ export default class Channel {
           if (message.ref != null) {
             const callback = this.callbacks[message.ref.toString()];
             if (callback) {
-              callback(message);
+              callback("message", message);
               // Clean up one-time callbacks after phx_reply
               if (message.event === "phx_reply") {
                 delete this.callbacks[message.ref.toString()];
               }
             }
           } else {
-            this.broadcastCallback(message);
+            this.broadcastCallback("message", message);
           }
         });
 
         socket.on("error", (e) => {
-          console.error("Channel WebSocket error:", e);
+          callback("error", e);
         });
 
-        socket.on("close", () => {
-          console.log("Channel WebSocket closed");
-        });
+        socket.on("close", () => {});
       }.bind(this),
     );
+
+    // Pass connection status to callback immediately
+    callback("connection", connectResult);
   }
 
   send(event, payload, callback = () => {}) {
@@ -76,7 +76,6 @@ export default class Channel {
 
   _send(event, topic, payload, callback = () => {}) {
     if (!this.socket) {
-      console.error("Cannot send, WebSocket is not connected");
       return;
     }
 
@@ -106,7 +105,6 @@ export default class Channel {
         payload: payload,
       };
     } catch (error) {
-      console.error("Failed to parse message:", error);
       return {};
     }
   }

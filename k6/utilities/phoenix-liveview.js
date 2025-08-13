@@ -18,8 +18,7 @@ export default class LiveView {
     const response = http.get(this.url.toString());
 
     if (response.status !== 200) {
-      console.error(`Failed to load page: ${response.status}`);
-      callback({ status: "error", reason: "Failed to load page" });
+      callback("error", `Failed to load page: ${response.status}`);
       return;
     }
 
@@ -31,8 +30,7 @@ export default class LiveView {
       this._extractLiveViewMetadata(response.body);
 
     if (!csrfToken || !phxId || !phxSession || !phxStatic) {
-      console.error("Missing required LiveView data");
-      callback({ status: "error", reason: "Missing LiveView data" });
+      callback("error", "Missing required LiveView data");
       return;
     }
 
@@ -48,8 +46,8 @@ export default class LiveView {
       this._createBroadcastHandler(),
     );
 
-    // Join the LiveView channel with exact parameters from elixir-k6
-    return this.channel.join(
+    // Join the LiveView channel - now purely callback-based
+    this.channel.join(
       {
         url: this.url.toString(),
         session: phxSession,
@@ -59,7 +57,14 @@ export default class LiveView {
           _mounts: 0,
         },
       },
-      this._wrapChannelCallback(callback),
+      (type, message) => {
+        if (type === "connection") {
+          callback(type, message);
+        } else {
+          // Handle other messages with wrapped callback
+          this._wrapChannelCallback(callback)(type, message);
+        }
+      },
     );
   }
 
@@ -123,10 +128,6 @@ export default class LiveView {
     const phxSession = liveViewElement.attr("data-phx-session");
     const phxStatic = liveViewElement.attr("data-phx-static");
 
-    console.log(
-      `Parsed LiveView: id=${phxId}, session=${phxSession ? "present" : "missing"}`,
-    );
-
     return {
       csrfToken: csrfToken,
       phxId: phxId,
@@ -137,7 +138,6 @@ export default class LiveView {
 
   _send(event, payload = {}, callback = () => {}) {
     if (!this.channel) {
-      console.error("Not connected to LiveView");
       return;
     }
 
@@ -153,7 +153,7 @@ export default class LiveView {
   }
 
   _wrapChannelCallback(userCallback) {
-    return (message) => {
+    return (type, message) => {
       if (message.event === "phx_reply" && message.payload?.status === "ok") {
         if (message.payload.response?.rendered) {
           // Apply the rendered response to update the HTML
@@ -168,12 +168,12 @@ export default class LiveView {
         }
       }
 
-      return userCallback(message);
+      return userCallback(type, message);
     };
   }
 
   _createBroadcastHandler() {
-    return (message) => {
+    return (type, message) => {
       if (message.event === "diff" && message.payload) {
         // Apply broadcast diff to update the HTML
         if (this.rendered) {
