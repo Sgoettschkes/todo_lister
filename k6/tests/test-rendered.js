@@ -1,41 +1,10 @@
 #!/usr/bin/env node
 
-// Simple test runner for the Rendered class
-// This allows us to test the HTML generation in isolation
+// Test suite for the Rendered class using Node.js built-in test runner
+import { test } from 'node:test';
+import { strict as assert } from 'node:assert';
 
-// Mock k6's parseHTML for Node.js environment
-import { JSDOM } from "jsdom";
-
-// Create a simple jQuery-like interface that mimics k6's parseHTML
-function parseHTML(html) {
-  const dom = new JSDOM(html);
-  const document = dom.window.document;
-
-  return {
-    find: (selector) => {
-      const elements = document.querySelectorAll(selector);
-      return {
-        first: () => {
-          if (elements.length === 0) return null;
-          const el = elements[0];
-          return {
-            attr: (name) => el.getAttribute(name),
-            html: (content) => {
-              if (content !== undefined) {
-                el.innerHTML = content;
-                return el;
-              }
-              return el.innerHTML;
-            },
-          };
-        },
-      };
-    },
-    html: () => dom.serialize(),
-  };
-}
-
-// Import the Rendered class (no k6 dependency now)
+// Import the Rendered class
 import Rendered from "../utilities/rendered.js";
 
 // Test data - sample HTML and diffs from actual k6 runs
@@ -90,54 +59,19 @@ const sampleAddItemDiff = {
   },
 };
 
-// Simple assertion functions
-function assert(condition, message) {
-  if (!condition) {
-    throw new Error(message || 'Assertion failed');
-  }
-}
-
-function assertEqual(actual, expected, message) {
-  if (actual !== expected) {
-    throw new Error(message || `Expected ${expected}, but got ${actual}`);
-  }
-}
-
-function assertTrue(condition, message) {
-  if (!condition) {
-    throw new Error(message || 'Expected condition to be true');
-  }
-}
-
-function assertFalse(condition, message) {
-  if (condition) {
-    throw new Error(message || 'Expected condition to be false');
-  }
-}
-
-// Simple test framework
-function test(name, testFn) {
-  try {
-    testFn();
-    console.log(`✅ ${name}`);
-  } catch (error) {
-    console.log(`❌ ${name}: ${error.message}`);
-    process.exitCode = 1;
-  }
-}
-
+// Helper function
 function countOccurrences(html, text) {
   return (html.match(new RegExp(text, "g")) || []).length;
 }
 
-// Tests
+// Tests using Node.js built-in test runner
 test("Initial rendering", () => {
   const rendered = new Rendered(sampleInitialHTML);
   const html = rendered.getFullHTML();
 
   // Should create a clean document template without the original content
-  assertTrue(html.length > 100, "HTML should have reasonable length");
-  assertFalse(html.includes("New Todo List"), "Should not contain original server-rendered content");
+  assert.ok(html.length > 100, "HTML should have reasonable length");
+  assert.ok(!html.includes("New Todo List"), "Should not contain original server-rendered content");
 });
 
 test("Title edit diff application", () => {
@@ -146,8 +80,8 @@ test("Title edit diff application", () => {
   // Apply the title edit diff (shows form)
   const htmlAfterEdit = rendered.applyDiff(sampleTitleEditDiff);
 
-  assertTrue(htmlAfterEdit.includes("<form"), "Should contain form after edit diff");
-  assertEqual(countOccurrences(htmlAfterEdit, "New Todo List"), 1, "Should have exactly one occurrence of 'New Todo List'");
+  assert.ok(htmlAfterEdit.includes("<form"), "Should contain form after edit diff");
+  assert.strictEqual(countOccurrences(htmlAfterEdit, "New Todo List"), 1, "Should have exactly one occurrence of 'New Todo List'");
 });
 
 test("Title save diff application", () => {
@@ -157,8 +91,8 @@ test("Title save diff application", () => {
   rendered.applyDiff(sampleTitleEditDiff);
   const htmlAfterSave = rendered.applyDiff(sampleTitleSaveDiff);
 
-  assertTrue(htmlAfterSave.includes("Updated Todo List via K6"), "Should contain updated title");
-  assertEqual(countOccurrences(htmlAfterSave, "Updated Todo List via K6"), 1, "Should have exactly one occurrence of updated title");
+  assert.ok(htmlAfterSave.includes("Updated Todo List via K6"), "Should contain updated title");
+  assert.strictEqual(countOccurrences(htmlAfterSave, "Updated Todo List via K6"), 1, "Should have exactly one occurrence of updated title");
 });
 
 test("Add item after title change", () => {
@@ -170,10 +104,10 @@ test("Add item after title change", () => {
   const htmlAfterAdd = rendered.applyDiff(sampleAddItemDiff);
 
   // The title should still be there and not duplicated
-  assertEqual(countOccurrences(htmlAfterAdd, "Updated Todo List via K6"), 1, "Title should appear exactly once after adding item");
+  assert.strictEqual(countOccurrences(htmlAfterAdd, "Updated Todo List via K6"), 1, "Title should appear exactly once after adding item");
   
   // Should contain the new task input
-  assertTrue(htmlAfterAdd.includes('New task'), "Should contain new task after add item diff");
+  assert.ok(htmlAfterAdd.includes('New task'), "Should contain new task after add item diff");
 });
 
 test("Direct HTML generation", () => {
@@ -187,10 +121,10 @@ test("Direct HTML generation", () => {
   };
 
   const generatedHTML = rendered.toHTML(rendered.rendered);
-  assertTrue(generatedHTML.includes("<nav>"), "Should contain nav element");
-  assertTrue(generatedHTML.includes("Updated Todo List via K6"), "Should contain title");
-  assertTrue(generatedHTML.includes("<div>content</div>"), "Should contain content div");
-  assertEqual(countOccurrences(generatedHTML, "Updated Todo List via K6"), 1, "Should have exactly one title in generated HTML");
+  assert.ok(generatedHTML.includes("<nav>"), "Should contain nav element");
+  assert.ok(generatedHTML.includes("Updated Todo List via K6"), "Should contain title");
+  assert.ok(generatedHTML.includes("<div>content</div>"), "Should contain content div");
+  assert.strictEqual(countOccurrences(generatedHTML, "Updated Todo List via K6"), 1, "Should have exactly one title in generated HTML");
 });
 
 test("No duplication in final HTML", () => {
@@ -204,9 +138,7 @@ test("No duplication in final HTML", () => {
   const finalHTML = rendered.getFullHTML();
   
   // Critical test: no duplicated content
-  assertEqual(countOccurrences(finalHTML, "Updated Todo List via K6"), 1, "Final HTML should have no duplicate titles");
-  assertEqual(countOccurrences(finalHTML, "<body"), 1, "Should have exactly one body tag");
-  assertEqual(countOccurrences(finalHTML, "</body>"), 1, "Should have exactly one closing body tag");
+  assert.strictEqual(countOccurrences(finalHTML, "Updated Todo List via K6"), 1, "Final HTML should have no duplicate titles");
+  assert.strictEqual(countOccurrences(finalHTML, "<body"), 1, "Should have exactly one body tag");
+  assert.strictEqual(countOccurrences(finalHTML, "</body>"), 1, "Should have exactly one closing body tag");
 });
-
-console.log("\n🔬 Testing Rendered class in isolation\n");

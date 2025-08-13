@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "node test-rendered.js"
+    "test": "node --test test-rendered.js"
   },
   "devDependencies": {
     "jsdom": "^24.0.0"
