@@ -314,6 +314,7 @@ export default class Rendered {
    * Core rendering function - matches Phoenix's to_iodata/4
    */
   toIOData(rendered, components, templates) {
+    
     // Handle string content (binary in Elixir)
     if (typeof rendered === "string") {
       return rendered;
@@ -325,21 +326,44 @@ export default class Rendered {
       return templates && templates[rendered] ? templates[rendered] : "";
     }
 
-    // Handle keyed content with static - matches Phoenix's keyed pattern
-    if (rendered[STATIC] !== undefined && rendered[KEYED] !== undefined) {
-      return this.handleKeyedContent(rendered, components, templates);
-    }
-
-    // Handle regular static content - matches Phoenix's static pattern  
-    if (rendered[STATIC] !== undefined) {
-      return this.handleStaticContent(rendered, components, templates);
-    }
-
-    // Handle objects - recursively process each key
+    // Handle objects first - check if this might be a Phoenix LiveView template structure
     if (this.isObject(rendered)) {
+      // Check for template structure BEFORE checking for static content
+      const keys = Object.keys(rendered);
+      const hasNumericKeys = keys.some(key => /^\d+$/.test(key));
+      const hasStaticKey = keys.includes(STATIC);
+      
+      if (hasNumericKeys && hasStaticKey) {
+        // This is a Phoenix template structure - use one_to_iodata algorithm
+        const staticTemplate = this.templateStatic(rendered[STATIC], templates);
+        if (Array.isArray(staticTemplate)) {
+          return this.oneToIOData(staticTemplate, rendered, 0, [], components, templates);
+        }
+        // If template can't be resolved but we have dynamics, process the dynamics anyway
+        const numericKeys = keys.filter(key => /^\d+$/.test(key));
+        if (numericKeys.length > 0) {
+          let html = "";
+          for (const key of numericKeys.sort((a, b) => parseInt(a) - parseInt(b))) {
+            html += this.toIOData(rendered[key], components, templates);
+          }
+          return html;
+        }
+      }
+      
+      // Handle keyed content with static - matches Phoenix's keyed pattern
+      if (rendered[STATIC] !== undefined && rendered[KEYED] !== undefined) {
+        return this.handleKeyedContent(rendered, components, templates);
+      }
+
+      // Handle regular static content - matches Phoenix's static pattern  
+      if (rendered[STATIC] !== undefined) {
+        return this.handleStaticContent(rendered, components, templates);
+      }
+      
+      // Regular object processing
       let html = "";
       // Process in key order for consistent output
-      const keys = Object.keys(rendered).sort((a, b) => {
+      const sortedKeys = keys.sort((a, b) => {
         // Numeric keys first, then alphabetic
         const aNum = /^\d+$/.test(a);
         const bNum = /^\d+$/.test(b);
@@ -349,13 +373,14 @@ export default class Rendered {
         return a.localeCompare(b);
       });
 
-      for (const key of keys) {
-        // Skip metadata keys
+      for (const key of sortedKeys) {
+        // Skip metadata keys at the top level only
         if (key === COMPONENTS || key === TEMPLATES || key === EVENTS || 
             key === REPLY || key === TITLE || key === ROOT || key === "r" ||
-            key === "t" || key === "s") {
+            key === "t") {
           continue;
         }
+        // Don't skip "s" key here - it may be needed for template resolution
         html += this.toIOData(rendered[key], components, templates);
       }
       return html;
