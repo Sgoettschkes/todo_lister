@@ -1,6 +1,6 @@
 /**
  * Phoenix LiveView Renderer for K6
- * 
+ *
  * This module handles the rendering and diff application for Phoenix LiveView
  * in a K6 testing environment. It maintains the current HTML state and applies
  * diffs received from the LiveView server.
@@ -25,21 +25,23 @@ export default class Rendered {
   constructor(initialHTML) {
     this.magicId = 0;
     this.parentViewId = "phx-test";
-    
+
     // Parse initial HTML to extract the LiveView container
     const doc = parseHTML(initialHTML);
-    const liveViewElement = doc.find("[data-phx-main]").first() || doc.find("[data-phx-view]").first();
-    
+    const liveViewElement =
+      doc.find("[data-phx-main]").first() ||
+      doc.find("[data-phx-view]").first();
+
     if (!liveViewElement) {
       throw new Error("No LiveView element found in initial HTML");
     }
-    
-    // Store the initial HTML and setup the rendered tree
-    this.initialHTML = initialHTML;
+
+    // Store the full document as a persistent DOM tree that we'll update
+    this.fullDocument = parseHTML(initialHTML);
     this.viewId = liveViewElement.attr("id");
     this.rendered = {};
     this.currentHTML = "";
-    
+
     // Extract the inner HTML of the LiveView element as the initial content
     const viewHTML = liveViewElement.html();
     if (viewHTML) {
@@ -52,39 +54,95 @@ export default class Rendered {
    * Apply a rendered response from the server (initial mount)
    */
   applyRendered(rendered) {
-    if (!rendered) return this.getCurrentHTML();
-    
+    if (!rendered) return this.getFullHTML();
+
     // Store the rendered tree and convert to HTML
     this.rendered = rendered;
     this.currentHTML = this.toHTML(this.rendered);
-    return this.getCurrentHTML();
+    this.updateFullDocument();
+
+    return this.getFullHTML();
   }
 
   /**
    * Apply a diff from the server
    */
   applyDiff(diff) {
-    if (!diff) return this.getCurrentHTML();
-    
+    if (!diff) return this.getFullHTML();
+
     // Handle components separately if present
     if (diff[COMPONENTS]) {
       this.mergeComponents(diff);
     }
-    
+
     // Merge the diff into our rendered state
     this.rendered = this.mutableMerge(this.rendered, diff);
-    
+
     // Re-render the HTML from the updated tree
     this.currentHTML = this.toHTML(this.rendered);
-    return this.getCurrentHTML();
+
+    this.updateFullDocument();
+    return this.getFullHTML();
   }
 
   /**
-   * Get the current HTML representation
+   * Update the full document with the current LiveView content
+   * Implements a robust DOM update mechanism that works with k6's HTML parsing limitations
    */
-  getCurrentHTML() {
-    // Return the current HTML directly - it's already been rendered
-    return this.currentHTML;
+  updateFullDocument() {
+    // Find the LiveView element in the full document
+    const liveViewElement =
+      this.fullDocument.find("[data-phx-main]").first() ||
+      this.fullDocument.find("[data-phx-view]").first();
+
+    if (!liveViewElement) {
+      return;
+    }
+
+    // Method 1: Try direct HTML replacement (works for simple cases)
+    liveViewElement.html(this.currentHTML);
+
+    // Method 2: If direct replacement doesn't work, use string-based replacement
+    // This handles cases where k6's DOM manipulation has limitations
+    if (!this.fullDocument.html().includes(this.currentHTML.substring(0, 50))) {
+      this.recreateFullDocument();
+    }
+
+    // Update the ID to match the current LiveView
+    if (this.viewId && liveViewElement.attr("id") !== this.viewId) {
+      liveViewElement.attr("id", this.viewId);
+    }
+  }
+
+  /**
+   * Recreate the full document by rebuilding it with the current HTML
+   */
+  recreateFullDocument() {
+    // Get the current full HTML as string
+    let fullHtml = this.fullDocument.html();
+
+    // Find the LiveView container in the string and replace its content
+    const liveViewRegex = /(<div[^>]*data-phx-main[^>]*>)(.*?)(<\/div>)/s;
+    const match = fullHtml.match(liveViewRegex);
+
+    if (match) {
+      const [, openTag, , closeTag] = match;
+      const updatedHtml = fullHtml.replace(
+        liveViewRegex,
+        openTag + this.currentHTML + closeTag,
+      );
+
+      // Parse the updated HTML and replace the full document
+      this.fullDocument = parseHTML(updatedHtml);
+    }
+  }
+
+  /**
+   * Get the full HTML document with LiveView content updated
+   */
+  getFullHTML() {
+    // Return the current state of the full document
+    return this.fullDocument.html();
   }
 
   /**
@@ -92,22 +150,22 @@ export default class Rendered {
    */
   toHTML(rendered, templates = null) {
     if (!rendered) return "";
-    
+
     // Update templates from the rendered object if available
     if (rendered[TEMPLATES]) {
       templates = rendered[TEMPLATES];
     }
-    
+
     // Handle string content
     if (typeof rendered === "string") {
       return rendered;
     }
-    
+
     // Handle numeric template reference
     if (typeof rendered === "number") {
       return templates && templates[rendered] ? templates[rendered] : "";
     }
-    
+
     // Handle static reference
     if (rendered[STATIC] !== undefined) {
       if (typeof rendered[STATIC] === "string") {
@@ -116,20 +174,24 @@ export default class Rendered {
       if (typeof rendered[STATIC] === "number" && templates) {
         const template = templates[rendered[STATIC]];
         if (Array.isArray(template)) {
-          // Process template array with dynamics
+          // Process template array with dynamics - this handles the interleaving
           return this.processTemplateArray(template, rendered, templates);
         }
         return template || "";
       }
+      // If we have numeric keys along with static, we need to interleave
+      if (this.hasNumericKeys(rendered)) {
+        return this.processNumericObject(rendered, templates);
+      }
       return this.toHTML(rendered[STATIC], templates);
     }
-    
+
     // Handle keyed content (comprehensions)
     if (rendered[KEYED]) {
       let html = "";
       const keyedObj = rendered[KEYED];
       const count = keyedObj[KEYED_COUNT] || 0;
-      
+
       for (let i = 0; i < count; i++) {
         if (keyedObj[i]) {
           html += this.toHTML(keyedObj[i], templates);
@@ -137,30 +199,38 @@ export default class Rendered {
       }
       return html;
     }
-    
+
     // Handle arrays
     if (Array.isArray(rendered)) {
-      return rendered.map(part => this.toHTML(part, templates)).join("");
+      return rendered.map((part) => this.toHTML(part, templates)).join("");
     }
-    
+
     // Handle objects with numeric keys (Phoenix LiveView format)
     if (this.hasNumericKeys(rendered)) {
       return this.processNumericObject(rendered, templates);
     }
-    
+
     // Handle object with dynamics
     if (rendered[DYNAMICS] !== undefined) {
       return this.dynamicsToHTML(rendered, templates);
     }
-    
+
     // Recursively process nested objects
     let html = "";
     for (const key in rendered) {
-      if (key !== COMPONENTS && key !== TEMPLATES && key !== EVENTS && key !== REPLY && key !== TITLE && key !== ROOT && key !== "r") {
+      if (
+        key !== COMPONENTS &&
+        key !== TEMPLATES &&
+        key !== EVENTS &&
+        key !== REPLY &&
+        key !== TITLE &&
+        key !== ROOT &&
+        key !== "r"
+      ) {
         html += this.toHTML(rendered[key], templates);
       }
     }
-    
+
     return html;
   }
 
@@ -171,7 +241,7 @@ export default class Rendered {
     const dynamics = rendered[DYNAMICS];
     const statics = rendered[STATIC] || [];
     let html = "";
-    
+
     // Interleave statics and dynamics
     for (let i = 0; i < dynamics.length; i++) {
       if (statics[i]) {
@@ -179,32 +249,13 @@ export default class Rendered {
       }
       html += this.toHTML(dynamics[i], templates);
     }
-    
+
     // Add any remaining static
     if (statics[dynamics.length]) {
       html += this.templateStatic(statics[dynamics.length], templates);
     }
-    
-    return html;
-  }
 
-  /**
-   * Recursively convert to HTML handling all types
-   */
-  recursiveToHTML(item, templates) {
-    if (typeof item === "string") {
-      return item;
-    }
-    if (typeof item === "number" && templates) {
-      return templates[item] || "";
-    }
-    if (Array.isArray(item)) {
-      return item.map(part => this.recursiveToHTML(part, templates)).join("");
-    }
-    if (typeof item === "object" && item !== null) {
-      return this.toHTML(item, templates);
-    }
-    return "";
+    return html;
   }
 
   /**
@@ -223,22 +274,22 @@ export default class Rendered {
   mergeComponents(diff) {
     const newc = diff[COMPONENTS];
     if (!newc) return;
-    
+
     if (!this.rendered[COMPONENTS]) {
       this.rendered[COMPONENTS] = {};
     }
-    
+
     const oldc = this.rendered[COMPONENTS];
     const cache = {};
-    
+
     for (const cid in newc) {
       newc[cid] = this.cachedFindComponent(cid, newc[cid], oldc, newc, cache);
     }
-    
+
     for (const cid in newc) {
       oldc[cid] = newc[cid];
     }
-    
+
     diff[COMPONENTS] = newc;
   }
 
@@ -249,10 +300,10 @@ export default class Rendered {
     if (cache[cid]) {
       return cache[cid];
     }
-    
+
     let ndiff;
     const scid = cdiff[STATIC];
-    
+
     if (typeof scid === "number") {
       let tdiff;
       if (scid > 0) {
@@ -260,7 +311,7 @@ export default class Rendered {
       } else {
         tdiff = oldc[-scid];
       }
-      
+
       if (tdiff) {
         const stat = tdiff[STATIC];
         ndiff = this.cloneMerge(tdiff, cdiff, true);
@@ -269,11 +320,12 @@ export default class Rendered {
         ndiff = cdiff;
       }
     } else {
-      ndiff = cdiff[STATIC] !== undefined || !oldc[cid]
-        ? cdiff
-        : this.cloneMerge(oldc[cid], cdiff, false);
+      ndiff =
+        cdiff[STATIC] !== undefined || !oldc[cid]
+          ? cdiff
+          : this.cloneMerge(oldc[cid], cdiff, false);
     }
-    
+
     cache[cid] = ndiff;
     return ndiff;
   }
@@ -284,11 +336,11 @@ export default class Rendered {
   mutableMerge(target, source) {
     if (!source) return target;
     if (!target) return source;
-    
+
     if (source[STATIC] !== undefined) {
       return source;
     }
-    
+
     this.doMutableMerge(target, source);
     return target;
   }
@@ -301,18 +353,22 @@ export default class Rendered {
       this.mergeKeyed(target, source);
       return;
     }
-    
+
     for (const key in source) {
       const val = source[key];
       const targetVal = target[key];
-      
-      if (this.isObject(val) && val[STATIC] === undefined && this.isObject(targetVal)) {
+
+      if (
+        this.isObject(val) &&
+        val[STATIC] === undefined &&
+        this.isObject(targetVal)
+      ) {
         this.doMutableMerge(targetVal, val);
       } else {
         target[key] = val;
       }
     }
-    
+
     if (target[ROOT]) {
       target.newRender = true;
     }
@@ -325,15 +381,15 @@ export default class Rendered {
     if (!target[KEYED]) {
       target[KEYED] = {};
     }
-    
+
     const clonedTarget = this.clone(target);
-    
+
     Object.entries(source[KEYED]).forEach(([i, entry]) => {
       if (i === KEYED_COUNT) {
         target[KEYED][KEYED_COUNT] = entry;
         return;
       }
-      
+
       if (Array.isArray(entry)) {
         // [old_idx, diff] - moved with diff
         const [oldIdx, diff] = entry;
@@ -354,7 +410,7 @@ export default class Rendered {
         this.doMutableMerge(target[KEYED][i], entry);
       }
     });
-    
+
     // Copy stream and templates if present
     if (source[STREAM]) {
       target[STREAM] = source[STREAM];
@@ -369,25 +425,29 @@ export default class Rendered {
    */
   cloneMerge(target, source, pruneMagicId) {
     const merged = { ...target, ...source };
-    
+
     for (const key in merged) {
       const val = source[key];
       const targetVal = target[key];
-      
-      if (this.isObject(val) && val[STATIC] === undefined && this.isObject(targetVal)) {
+
+      if (
+        this.isObject(val) &&
+        val[STATIC] === undefined &&
+        this.isObject(targetVal)
+      ) {
         merged[key] = this.cloneMerge(targetVal, val, pruneMagicId);
       } else if (val === undefined && this.isObject(targetVal)) {
         merged[key] = this.cloneMerge(targetVal, {}, pruneMagicId);
       }
     }
-    
+
     if (pruneMagicId) {
       delete merged.magicId;
       delete merged.newRender;
     } else if (target[ROOT]) {
       merged.newRender = true;
     }
-    
+
     return merged;
   }
 
@@ -397,7 +457,7 @@ export default class Rendered {
   clone(obj) {
     if (obj === null || typeof obj !== "object") return obj;
     if (obj instanceof Date) return new Date(obj);
-    if (obj instanceof Array) return obj.map(item => this.clone(item));
+    if (obj instanceof Array) return obj.map((item) => this.clone(item));
     if (obj instanceof Object) {
       const clonedObj = {};
       for (const key in obj) {
@@ -415,47 +475,80 @@ export default class Rendered {
   isObject(val) {
     return val !== null && typeof val === "object" && !Array.isArray(val);
   }
-  
+
   /**
    * Check if object has numeric keys (Phoenix LiveView format)
    */
   hasNumericKeys(obj) {
     if (!this.isObject(obj)) return false;
     const keys = Object.keys(obj);
-    return keys.some(key => /^\d+$/.test(key));
+    return keys.some((key) => /^\d+$/.test(key));
   }
-  
+
   /**
    * Process object with numeric keys
    */
   processNumericObject(obj, templates) {
-    let html = "";
-    const keys = Object.keys(obj).filter(key => /^\d+$/.test(key)).sort((a, b) => parseInt(a) - parseInt(b));
-    
-    for (const key of keys) {
-      html += this.toHTML(obj[key], templates);
+    // This should follow the Phoenix LiveView algorithm from one_to_iodata
+    // We need to interleave static parts with dynamic parts
+
+    const staticParts = obj[STATIC];
+    if (!staticParts) {
+      let html = "";
+      const keys = Object.keys(obj)
+        .filter((key) => /^\d+$/.test(key))
+        .sort((a, b) => parseInt(a) - parseInt(b));
+
+      for (const key of keys) {
+        html += this.toHTML(obj[key], templates);
+      }
+
+      return html;
     }
-    
+
+    // Resolve static parts (could be array or template reference)
+    const statics = this.templateStatic(staticParts, templates);
+    if (!Array.isArray(statics)) {
+      return "";
+    }
+
+    // Interleave static and dynamic parts
+    let html = "";
+    for (let i = 0; i < statics.length; i++) {
+      if (i < statics.length - 1) {
+        // Add static part
+        html += statics[i];
+        // Add corresponding dynamic part if it exists
+        if (obj[i] !== undefined) {
+          html += this.toHTML(obj[i], templates);
+        }
+      } else {
+        // Last static part (no dynamic after it)
+        html += statics[i];
+      }
+    }
+
     return html;
   }
-  
+
   /**
    * Process template array with dynamics
    */
   processTemplateArray(templateArray, rendered, templates) {
     let html = "";
-    
+
     for (let i = 0; i < templateArray.length; i++) {
       const part = templateArray[i];
-      
+
       // Check if there's a dynamic value for this position
       if (rendered[i] !== undefined) {
-        html += this.toHTML(rendered[i], templates);
+        const dynamicHtml = this.toHTML(rendered[i], templates);
+        html += dynamicHtml;
       } else {
         html += this.toHTML(part, templates);
       }
     }
-    
+
     return html;
   }
 }

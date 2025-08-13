@@ -104,8 +104,8 @@ export default class LiveView {
   }
 
   getHtml() {
-    // Return the current HTML from the renderer
-    return this.rendered ? this.rendered.getCurrentHTML() : null;
+    // Return the full HTML document with LiveView content updated
+    return this.rendered ? this.rendered.getFullHTML() : null;
   }
 
   _extractLiveViewMetadata(html) {
