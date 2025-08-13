@@ -304,7 +304,8 @@ export default class Rendered {
   toHTML(rendered) {
     if (!rendered) return "";
 
-    const components = this.components;
+    // Use components from the rendered tree itself, not the instance components
+    const components = rendered[COMPONENTS] || this.components;
     const templates = rendered[TEMPLATES] || null;
     
     return this.toIOData(rendered, components, templates);
@@ -320,10 +321,43 @@ export default class Rendered {
       return rendered;
     }
 
-    // Handle component references (integer cid)
+    // Handle numbers - convert to string for rendering  
     if (typeof rendered === "number") {
-      // In our case, treat numbers as template references
-      return templates && templates[rendered] ? templates[rendered] : "";
+      // First check if this number is a component reference
+      if (components && components[rendered]) {
+        const component = components[rendered];
+        
+        // Handle component template sharing - if component has "s": integer, merge with referenced component
+        // But only do this for certain patterns, not all numeric static references
+        if (component[STATIC] && typeof component[STATIC] === "number" && components[component[STATIC]]) {
+          // Check if this component actually needs template sharing by looking at its structure
+          // Only do template sharing if the component has truly minimal content (just references)
+          const componentKeys = Object.keys(component);
+          const hasOnlyStaticReference = componentKeys.length === 1 && componentKeys[0] === STATIC;
+          const hasMinimalPlainContent = componentKeys.filter(k => /^\d+$/.test(k)).length === 1 && 
+                                       component["0"] && 
+                                       this.isObject(component["0"]) &&
+                                       Object.keys(component["0"]).length === 1 &&
+                                       component["0"]["0"] &&
+                                       typeof component["0"]["0"] === "string";  // Only plain string content
+          
+          if (hasOnlyStaticReference || hasMinimalPlainContent) {
+            const templateComponent = components[component[STATIC]];
+            const mergedComponent = this.mergeComponentTemplates(component, templateComponent);
+            return this.toIOData(mergedComponent, components, templates);
+          }
+        }
+        
+        return this.toIOData(component, components, templates);
+      }
+      
+      // Check if it's a template reference
+      if (templates && templates[rendered]) {
+        return templates[rendered];
+      }
+      
+      // If it's not a component or template reference, treat as literal number content
+      return String(rendered);
     }
 
     // Handle objects first - check if this might be a Phoenix LiveView template structure
@@ -335,7 +369,26 @@ export default class Rendered {
       
       if (hasNumericKeys && hasStaticKey) {
         // This is a Phoenix template structure - use one_to_iodata algorithm
-        const staticTemplate = this.templateStatic(rendered[STATIC], templates);
+        const staticRef = rendered[STATIC];
+        
+        // If static ref points to a component, we need to handle component template sharing
+        if (typeof staticRef === "number" && components && components[staticRef]) {
+          const referencedComponent = components[staticRef];
+          // Use the referenced component's structure as a template for this component
+          const templateStructure = { ...referencedComponent };
+          
+          // Apply this component's dynamics to the template structure
+          const result = { ...templateStructure };
+          for (const key of keys) {
+            if (/^\d+$/.test(key) && rendered[key] !== undefined) {
+              result[key] = rendered[key];
+            }
+          }
+          
+          return this.toIOData(result, components, templates);
+        }
+        
+        const staticTemplate = this.templateStatic(staticRef, templates, components);
         if (Array.isArray(staticTemplate)) {
           return this.oneToIOData(staticTemplate, rendered, 0, [], components, templates);
         }
@@ -409,11 +462,33 @@ export default class Rendered {
 
     let html = "";
     for (let i = 0; i < count; i++) {
-      if (keyedObj[i]) {
-        // Create diff with static template applied to each keyed item
-        const diff = { ...keyedObj[i] };
-        diff[STATIC] = staticTemplate;
-        html += this.toIOData(diff, components, templates);
+      const keyedItem = keyedObj[i];
+      if (keyedItem !== undefined) {
+        // Check if the keyed item is an empty object - if so, just render static template once
+        if (this.isObject(keyedItem) && Object.keys(keyedItem).length === 0) {
+          // Empty keyed item - render static template directly without extra processing
+          if (Array.isArray(staticTemplate)) {
+            if (staticTemplate.length === 1) {
+              // Single part template - add it with potential formatting
+              // Phoenix LiveView adds a newline for certain comprehension patterns
+              html += staticTemplate[0];
+              if (staticTemplate[0] && !staticTemplate[0].endsWith("\n")) {
+                html += "\n";
+              }
+            } else {
+              // Multi-part template - join all parts (no dynamics to interleave)
+              html += staticTemplate.join("");
+            }
+          } else if (typeof staticTemplate === "string") {
+            html += staticTemplate;
+          }
+          break;
+        } else {
+          // Create diff with static template applied to each keyed item
+          const diff = { ...keyedItem };
+          diff[STATIC] = staticTemplate;
+          html += this.toIOData(diff, components, templates);
+        }
       }
     }
     return html;
@@ -424,7 +499,7 @@ export default class Rendered {
    */
   handleStaticContent(rendered, components, templates) {
     const staticRef = rendered[STATIC];
-    const staticTemplate = this.templateStatic(staticRef, templates);
+    const staticTemplate = this.templateStatic(staticRef, templates, components);
 
     if (Array.isArray(staticTemplate)) {
       // Use one_to_iodata algorithm for template interleaving
@@ -464,9 +539,28 @@ export default class Rendered {
   /**
    * Resolve template references - matches Phoenix's template_static
    */
-  templateStatic(staticRef, templates) {
-    if (typeof staticRef === "number" && templates) {
-      return templates[staticRef] || "";
+  templateStatic(staticRef, templates, components) {
+    if (typeof staticRef === "number") {
+      // First try templates
+      if (templates && templates[staticRef]) {
+        return templates[staticRef];
+      }
+      // For component references, be more careful about what we return
+      if (components && components[staticRef]) {
+        const component = components[staticRef];
+        // Only follow the static reference if it points to an array template
+        if (component[STATIC] && Array.isArray(component[STATIC])) {
+          return component[STATIC];
+        }
+        // If the component's static is another reference, be careful not to inherit wrong structure
+        if (component[STATIC] && typeof component[STATIC] === "number") {
+          // Recursively resolve, but avoid infinite loops
+          if (component[STATIC] !== staticRef) {
+            return this.templateStatic(component[STATIC], templates, components);
+          }
+        }
+      }
+      return "";
     }
     if (Array.isArray(staticRef)) {
       return staticRef;
@@ -693,6 +787,31 @@ export default class Rendered {
       }
       return clonedObj;
     }
+  }
+
+  /**
+   * Merge component templates for template sharing (when component has "s": integer)
+   */
+  mergeComponentTemplates(component, templateComponent) {
+    const merged = { ...templateComponent };
+    
+    // Override with component's own dynamic content but keep template's static structure
+    for (const key in component) {
+      if (/^\d+$/.test(key) && component[key]) {
+        // For numeric keys (dynamic content), we need to merge the template's static structure
+        if (templateComponent[key] && this.isObject(templateComponent[key]) && this.isObject(component[key])) {
+          // Merge the dynamic content with the template's static structure
+          merged[key] = { ...templateComponent[key], ...component[key] };
+        } else {
+          merged[key] = component[key];
+        }
+      } else if (key !== STATIC) {
+        // Copy other non-static keys as-is
+        merged[key] = component[key];
+      }
+    }
+    
+    return merged;
   }
 
   /**

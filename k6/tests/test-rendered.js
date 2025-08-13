@@ -65,6 +65,270 @@ function countOccurrences(html, text) {
 }
 
 // Tests using Node.js built-in test runner
+
+// ========================================
+// Phoenix LiveView Compatibility Tests
+// ========================================
+
+test("Phoenix LiveView - subtrees chain", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Input from Phoenix LiveView test case
+  const phoenixInput = {
+    "0": {
+      "k": {
+        "0": {"0": "1", "1": 1},
+        "1": {"0": "2", "1": 2}, 
+        "2": {"0": "3", "1": 3},
+        "kc": 3
+      },
+      "s": ["\n", ":", ""]
+    },
+    "c": {
+      "1": {"0": {"0": "index_1", "s": ["\nIF ", ""]}, "s": ["", ""]},
+      "2": {"0": {"0": "index_2", "s": ["\nELSE ", ""]}, "s": 1},
+      "3": {"0": {"0": "index_3"}, "s": 2}
+    },
+    "s": ["<div>", "\n</div>"]
+  };
+  
+  // Expected output from Phoenix LiveView
+  const expectedOutput = `<div>
+1:
+IF index_1
+2:
+ELSE index_2
+3:
+ELSE index_3
+</div>`;
+
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should match Phoenix LiveView subtrees chain output");
+});
+
+test("Phoenix LiveView - subtrees with comprehension replacement", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Input from Phoenix LiveView test case  
+  const phoenixInput = {
+    "0": 1,
+    "1": 2,
+    "c": {
+      "1": {
+        "0": {
+          "0": {"k": {"0": {}, "1": {}, "2": {}, "kc": 3}, "s": ["ROW"]},
+          "s": ["\n", ""]
+        },
+        "s": ["<div>", "</div>"]
+      },
+      "2": {
+        "0": {
+          "0": {"s": ["COL"]}
+        },
+        "s": 1
+      }
+    },
+    "s": ["", "", "", ""]
+  };
+  
+  // Expected output from Phoenix LiveView test 
+  const expectedOutput = `<div>
+ROW
+</div>COL`;
+
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should match Phoenix LiveView subtrees with comprehension replacement output");
+});
+
+test("Phoenix LiveView - simple component rendering", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Simple component structure - one component with static template
+  const phoenixInput = {
+    "0": 1,
+    "c": {
+      "1": {
+        "0": "Hello World",
+        "s": ["<p>", "</p>"]
+      }
+    },
+    "s": ["<div>", "</div>"]
+  };
+  
+  const expectedOutput = `<div><p>Hello World</p></div>`;
+  
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should match simple component rendering");
+});
+
+test("Phoenix LiveView - nested components", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Nested component structure 
+  const phoenixInput = {
+    "0": {
+      "0": 1,
+      "s": ["<div class=\"outer\">", "</div>"]
+    },
+    "c": {
+      "1": {
+        "0": "Inner Content",
+        "s": ["<span>", "</span>"]
+      }
+    },
+    "s": ["", ""]
+  };
+  
+  const expectedOutput = `<div class="outer"><span>Inner Content</span></div>`;
+  
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should match nested component rendering");
+});
+
+test("Phoenix LiveView - multiple dynamics with templates", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Multiple dynamic slots with template interleaving
+  const phoenixInput = {
+    "0": "First",
+    "1": "Second", 
+    "2": "Third",
+    "s": ["<div>", " | ", " | ", "</div>"]
+  };
+  
+  const expectedOutput = `<div>First | Second | Third</div>`;
+  
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should match multiple dynamics with templates");
+});
+
+test("Phoenix LiveView - empty keyed comprehension", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Empty keyed comprehension - should render nothing
+  const phoenixInput = {
+    "0": {
+      "k": {
+        "kc": 0
+      },
+      "s": ["<li>", "</li>"]
+    },
+    "s": ["<ul>", "</ul>"]
+  };
+  
+  const expectedOutput = `<ul></ul>`;
+  
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should match empty keyed comprehension");
+});
+
+test("Phoenix LiveView - keyed comprehension with data", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Keyed comprehension with actual data
+  const phoenixInput = {
+    "0": {
+      "k": {
+        "0": {"0": "Item 1"},
+        "1": {"0": "Item 2"},
+        "2": {"0": "Item 3"},
+        "kc": 3
+      },
+      "s": ["<li>", "</li>"]
+    },
+    "s": ["<ul>", "</ul>"]
+  };
+  
+  const expectedOutput = `<ul><li>Item 1</li><li>Item 2</li><li>Item 3</li></ul>`;
+  
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should match keyed comprehension with data");
+});
+
+test("Phoenix LiveView - mixed content types", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Mix of strings, numbers, and components
+  const phoenixInput = {
+    "0": "Hello",
+    "1": 42,
+    "2": 1,
+    "c": {
+      "1": {
+        "0": "Component Content",
+        "s": ["<em>", "</em>"]
+      }
+    },
+    "s": ["<div>", " - ", " - ", "</div>"]
+  };
+  
+  const expectedOutput = `<div>Hello - 42 - <em>Component Content</em></div>`;
+  
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should match mixed content types");
+});
+
+test("Phoenix LiveView - deeply nested structure", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Deeply nested structure with multiple levels
+  const phoenixInput = {
+    "0": {
+      "0": {
+        "0": "Deep Content",
+        "s": ["<span>", "</span>"]
+      },
+      "s": ["<div class=\"inner\">", "</div>"]
+    },
+    "s": ["<div class=\"outer\">", "</div>"]
+  };
+  
+  const expectedOutput = `<div class="outer"><div class="inner"><span>Deep Content</span></div></div>`;
+  
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should match deeply nested structure");
+});
+
+test("Phoenix LiveView - empty string in template", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Test that empty strings in templates are properly handled
+  const phoenixInput = {
+    "0": "CONTENT",
+    "s": ["\n", ""]  // Should render as \nCONTENT + empty string = \nCONTENT\n
+  };
+  
+  const expectedOutput = `\nCONTENT`;
+  
+  rendered.rendered = phoenixInput;
+  const actualOutput = rendered.toHTML(phoenixInput);
+  
+  assert.strictEqual(actualOutput, expectedOutput, "Should properly handle empty string in template");
+});
+
+// ========================================
+// Original Tests
+// ========================================
+
 test("Initial rendering", () => {
   const rendered = new Rendered(sampleInitialHTML);
   const html = rendered.getFullHTML();
