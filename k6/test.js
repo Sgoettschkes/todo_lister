@@ -30,10 +30,18 @@ const createConnectToLiveViewStep = (config) => {
         // Make sure we have the connection status
         next();
       } else {
-        ctx[liveViewKey].leave();
         next();
       }
     });
+  };
+};
+
+const createLeaveLiveViewStep = (config) => {
+  return (ctx, next) => {
+    const liveViewKey = config.liveViewKey;
+
+    ctx[liveViewKey].leave();
+    next();
   };
 };
 
@@ -44,6 +52,20 @@ const connectToLandingPage = createConnectToLiveViewStep({
   connectedKey: "landingConnected",
 });
 
+const createTodoList = (ctx, next) => {
+  ctx.liveView.pushClick("create_list", {}, (type, createResponse) => {
+    if (type === "message") {
+      ctx.listUrl = createResponse.payload.response.live_redirect.to;
+      ctx.listCreated = ctx.listUrl !== null;
+    }
+    next();
+  });
+};
+
+const leaveLandingPage = createLeaveLiveViewStep({
+  liveViewKey: "liveView",
+});
+
 const connectToListPage = createConnectToLiveViewStep({
   urlBuilder: (ctx) => `${ctx.baseUrl}${ctx.listUrl}`,
   liveViewKey: "listLiveView",
@@ -51,46 +73,22 @@ const connectToListPage = createConnectToLiveViewStep({
   skipCondition: (ctx) => !ctx.listUrl,
 });
 
-const createTodoList = (ctx, next) => {
-  ctx.liveView.pushClick("create_list", {}, (type, createResponse) => {
-    if (
-      createResponse.event === "phx_reply" &&
-      createResponse.payload?.status === "ok"
-    ) {
-      ctx.listUrl = createResponse.payload.response.live_redirect.to;
-      ctx.listCreated = ctx.listUrl !== null;
-    }
-
-    ctx.liveView.leave();
-    next();
-  });
-};
-
 const editTitle = (ctx, next) => {
   if (!ctx.listLiveView || !ctx.listConnected) {
     next();
     return;
   }
 
-  ctx.listLiveView.pushClick("edit_title", {}, (type, editResponse) => {
-    if (
-      editResponse.event === "phx_reply" &&
-      editResponse.payload?.status === "ok"
-    ) {
+  ctx.listLiveView.pushClick("edit_title", {}, (type, response) => {
+    if (type === "message") {
       ctx.editSuccessful = true;
-      next();
-    } else {
-      ctx.listLiveView.leave();
-      next();
     }
+    next();
   });
 };
 
 const saveTitle = (ctx, next) => {
   if (!ctx.listLiveView || !ctx.editSuccessful) {
-    if (ctx.listLiveView) {
-      ctx.listLiveView.leave();
-    }
     next();
     return;
   }
@@ -98,22 +96,22 @@ const saveTitle = (ctx, next) => {
   ctx.listLiveView.pushBlur(
     "save_title",
     { value: "Updated Todo List via K6" },
-    (type, saveResponse) => {
-      if (
-        saveResponse.event === "phx_reply" &&
-        saveResponse.payload?.status === "ok"
-      ) {
+    (type, response) => {
+      if (type === "message") {
         const html = ctx.listLiveView.getHtml();
         if (html) {
           ctx.titleChanged = html.includes("Updated Todo List via K6");
         }
       }
 
-      ctx.listLiveView.leave();
       next();
     },
   );
 };
+
+const leaveListPage = createLeaveLiveViewStep({
+  liveViewKey: "listLiveView",
+});
 
 export default function () {
   const scenario = new TestScenario();
@@ -133,9 +131,11 @@ export default function () {
   scenario
     .addStep("Connect to landing page", connectToLandingPage)
     .addStep("Create todo list", createTodoList)
+    .addStep("Leave landing page", leaveLandingPage)
     .addStep("Connect to list page", connectToListPage)
     .addStep("Edit title", editTitle)
-    .addStep("Save title", saveTitle);
+    .addStep("Save title", saveTitle)
+    .addStep("Leave list page", leaveListPage);
 
   // Define checks
   scenario
