@@ -38,7 +38,7 @@ defmodule TodoListerWeb.LandingIntegrationTest do
       assert html =~ "New Todo List"
       assert html =~ "Created:"
       assert html =~ "Last updated:"
-      assert html =~ "Back to Home"
+      assert html =~ "TodoLister"
     end
   end
 end

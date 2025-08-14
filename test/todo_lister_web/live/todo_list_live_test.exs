@@ -34,10 +34,10 @@ defmodule TodoListerWeb.TodoListLiveTest do
       end
     end
 
-    test "displays back to home link", %{conn: conn, todo_list: todo_list} do
+    test "displays navigation to home via header", %{conn: conn, todo_list: todo_list} do
       {:ok, _view, html} = live(conn, ~p"/tl/#{todo_list.id}")
 
-      assert html =~ "Back to Home"
+      assert html =~ "TodoLister"
     end
 
     test "displays placeholder for todo items", %{conn: conn, todo_list: todo_list} do

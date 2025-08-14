@@ -1,7 +1,7 @@
 defmodule TodoLister.ListsHistoryIntegrationTest do
   use TodoLister.DataCase
 
-  alias TodoLister.{Lists, History, Repo}
+  alias TodoLister.{Lists, History}
 
   describe "todo list operations with history" do
     test "create_todo_list/2 records history when client_id provided" do
@@ -26,7 +26,7 @@ defmodule TodoLister.ListsHistoryIntegrationTest do
     test "update_todo_list/3 records history for title changes" do
       {:ok, todo_list} = Lists.create_todo_list(%{title: "Original Title"})
 
-      {:ok, updated_list} = Lists.update_todo_list(todo_list, %{title: "New Title"}, "editor-456")
+      {:ok, _updated_list} = Lists.update_todo_list(todo_list, %{title: "New Title"}, "editor-456")
 
       history = History.get_list_history(todo_list.id)
       assert length(history) == 1
@@ -51,7 +51,7 @@ defmodule TodoLister.ListsHistoryIntegrationTest do
     test "delete_todo_list/2 records history when client_id provided" do
       {:ok, todo_list} = Lists.create_todo_list(%{title: "To Delete"})
 
-      {:ok, deleted_list} = Lists.delete_todo_list(todo_list, "deleter-789")
+      {:ok, _deleted_list} = Lists.delete_todo_list(todo_list, "deleter-789")
 
       history = History.get_list_history(todo_list.id)
       assert length(history) == 1
@@ -86,8 +86,8 @@ defmodule TodoLister.ListsHistoryIntegrationTest do
     end
 
     test "create_todo_item/3 assigns correct order values", %{todo_list: todo_list} do
-      {:ok, item1} = Lists.create_todo_item(todo_list, %{text: "First Task"}, "creator")
-      {:ok, item2} = Lists.create_todo_item(todo_list, %{text: "Second Task"}, "creator")
+      {:ok, _item1} = Lists.create_todo_item(todo_list, %{text: "First Task"}, "creator")
+      {:ok, _item2} = Lists.create_todo_item(todo_list, %{text: "Second Task"}, "creator")
 
       history = History.get_list_history(todo_list.id)
       assert length(history) == 2

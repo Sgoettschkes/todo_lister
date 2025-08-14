@@ -1,7 +1,7 @@
 defmodule TodoLister.HistoryTest do
   use TodoLister.DataCase
 
-  alias TodoLister.{History, Lists, Repo}
+  alias TodoLister.{History, Lists}
 
   describe "create_history/3" do
     test "creates a history record with valid data" do
