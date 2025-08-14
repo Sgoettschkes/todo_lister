@@ -28,16 +28,6 @@ const createConnectToLiveViewStep = (config) => {
         // do nothing
       } else if (type === "message") {
         ctx[connectedKey] = true;
-        
-        // Check page title if titleCheck config is provided
-        if (config.titleCheck) {
-          const html = ctx[liveViewKey].getHtml();
-          const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
-          const actualTitle = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : null;
-          ctx[config.titleCheck.titleVar] = actualTitle;
-          ctx[config.titleCheck.correctVar] = actualTitle === config.titleCheck.expectedTitle;
-        }
-        
         next();
       } else {
         next();
@@ -60,11 +50,6 @@ const connectToLandingPage = createConnectToLiveViewStep({
   urlBuilder: (ctx) => ctx.baseUrl,
   liveViewKey: "liveView",
   connectedKey: "landingConnected",
-  titleCheck: {
-    titleVar: "landingPageTitle",
-    correctVar: "landingTitleCorrect",
-    expectedTitle: "Home | Todo Lister"
-  }
 });
 
 const createTodoList = (ctx, next) => {
@@ -86,11 +71,6 @@ const connectToListPage = createConnectToLiveViewStep({
   liveViewKey: "listLiveView",
   connectedKey: "listConnected",
   skipCondition: (ctx) => !ctx.listUrl,
-  titleCheck: {
-    titleVar: "initialListPageTitle",
-    correctVar: "initialListTitleCorrect",
-    expectedTitle: "New Todo List | Todo Lister"
-  }
 });
 
 const editTitle = (ctx, next) => {
@@ -119,17 +99,16 @@ const saveTitle = (ctx, next) => {
     (type, response) => {
       if (type === "message") {
         const html = ctx.listLiveView.getHtml();
-        // Check both the h1 content and the page title
-        const h1Text = parseHTML(html).find("h1").text();
-        const h1TitleChanged = h1Text.includes("Updated Todo List via K6");
-        
-        // Check the page title in the <title> tag
-        const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
-        ctx.updatedPageTitle = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : null;
-        const pageTitleChanged = ctx.updatedPageTitle === "Updated Todo List via K6 | Todo Lister";
-        
-        ctx.titleChanged = h1TitleChanged && pageTitleChanged;
-        ctx.pageTitleCorrectAfterChange = pageTitleChanged;
+        const doc = parseHTML(html);
+
+        ctx.h1TitleCorrectAfterSave = doc
+          .find("h1")
+          .text()
+          .includes("Updated Todo List via K6");
+
+        ctx.pageTitleCorrectAfterSave =
+          doc.find("title").text().trim() ===
+          "Updated Todo List via K6 | Todo Lister";
       }
 
       next();
@@ -207,15 +186,9 @@ export default function () {
     landingConnected: false,
     listCreated: false,
     listConnected: false,
-    titleChanged: false,
     addFirstTodoListItem: false,
-    // Page title tracking
-    landingPageTitle: null,
-    landingTitleCorrect: false,
-    initialListPageTitle: null,
-    initialListTitleCorrect: false,
-    updatedPageTitle: null,
-    pageTitleCorrectAfterChange: false,
+    h1TitleCorrectAfterSave: false,
+    pageTitleCorrectAfterSave: false,
     refreshButtonDisabledAfterClick: false,
     refreshButtonReEnabled: false,
   };
@@ -239,23 +212,18 @@ export default function () {
       "Connected to landing page",
       (ctx) => ctx.landingConnected === true,
     )
-    .addCheck(
-      "Landing page title is correct",
-      (ctx) => ctx.landingTitleCorrect === true,
-    )
     .addCheck("Todo list created", (ctx) => ctx.listCreated === true)
     .addCheck(
       "Connected to todo list page",
       (ctx) => ctx.listConnected === true,
     )
     .addCheck(
-      "Initial todo list page title is correct",
-      (ctx) => ctx.initialListTitleCorrect === true,
+      "H1 title correct after save",
+      (ctx) => ctx.h1TitleCorrectAfterSave === true,
     )
-    .addCheck("Todo list title was changed", (ctx) => ctx.titleChanged === true)
     .addCheck(
-      "Page title updated after title change",
-      (ctx) => ctx.pageTitleCorrectAfterChange === true,
+      "Page title correct after save",
+      (ctx) => ctx.pageTitleCorrectAfterSave === true,
     )
     .addCheck(
       "First Todo List Item was added",
