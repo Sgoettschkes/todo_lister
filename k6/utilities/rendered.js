@@ -20,6 +20,11 @@ const KEYED = "k";
 const KEYED_COUNT = "kc";
 
 export default class Rendered {
+  static extract(diff) {
+    const { [REPLY]: reply, [EVENTS]: events, [TITLE]: title, ...cleanDiff } = diff;
+    return { diff: cleanDiff, title, reply: reply || null, events: events || [] };
+  }
+
   constructor(initialHTML) {
     this.magicId = 0;
     this.parentViewId = "phx-test";
@@ -37,6 +42,9 @@ export default class Rendered {
     
     // Components state (like Phoenix LiveView)
     this.components = {};
+    
+    // Page title state - extracted from initial HTML and updated via diffs
+    this.pageTitle = this.extractInitialPageTitle(initialHTML);
   }
 
   /**
@@ -106,6 +114,19 @@ export default class Rendered {
   }
 
   /**
+   * Extract the initial page title from HTML
+   */
+  extractInitialPageTitle(html) {
+    // Look for <title> tag content
+    const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
+    if (titleMatch) {
+      // Clean up whitespace and extract just the text content
+      return titleMatch[1].replace(/\s+/g, ' ').trim();
+    }
+    return null;
+  }
+
+  /**
    * Extract ViewId from HTML - helper method
    */
   extractViewIdFromHTML(html) {
@@ -149,8 +170,16 @@ export default class Rendered {
   /**
    * Apply a diff from the server
    */
-  applyDiff(diff) {
-    if (!diff) return this.getFullHTML();
+  applyDiff(rawDiff) {
+    if (!rawDiff) return this.getFullHTML();
+
+    // Extract title, events, reply following Phoenix LiveView pattern
+    const { diff, title } = Rendered.extract(rawDiff);
+    
+    // Handle page title updates (like Phoenix LiveView's DOM.putTitle)
+    if (typeof title === "string") {
+      this.pageTitle = title;
+    }
 
     // Handle components separately if present
     if (diff[COMPONENTS]) {
@@ -238,8 +267,26 @@ export default class Rendered {
     // Convert the rendered tree to HTML using Phoenix LiveView algorithm
     const liveViewHTML = this.toHTML(this.rendered);
     
-    // Inject the LiveView HTML into the full document template
-    return this.injectLiveViewContent(liveViewHTML);
+    // Inject the LiveView HTML and update page title
+    let fullHTML = this.injectLiveViewContent(liveViewHTML);
+    fullHTML = this.updatePageTitle(fullHTML);
+    
+    return fullHTML;
+  }
+
+  /**
+   * Update the page title in the HTML document
+   */
+  updatePageTitle(html) {
+    if (this.pageTitle === null) {
+      return html;
+    }
+    
+    // Replace the content of the <title> tag
+    return html.replace(
+      /<title[^>]*>.*?<\/title>/i,
+      `<title>${this.pageTitle}</title>`
+    );
   }
 
   /**

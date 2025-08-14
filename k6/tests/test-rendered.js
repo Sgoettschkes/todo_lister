@@ -39,6 +39,11 @@ const sampleTodoListTitleSaveDiff = {
   },
 };
 
+// Sample diff with page title change (Phoenix LiveView sends title as "t" field)
+const samplePageTitleDiff = {
+  t: "Updated Todo List via K6"
+};
+
 const sampleAddItemDiff = {
   5: {
     0: {
@@ -338,6 +343,25 @@ test("Initial rendering", () => {
   assert.ok(!html.includes("New Todo List"), "Should not contain original server-rendered content");
 });
 
+test("Initial page title in HTML", () => {
+  const rendered = new Rendered(sampleInitialHTML);
+  const html = rendered.getFullHTML();
+  
+  // Should preserve the initial page title in HTML
+  assert.ok(html.includes("<title>TodoLister</title>"), "Should preserve 'TodoLister' as initial page title in HTML");
+});
+
+test("Page title update via diff", () => {
+  const rendered = new Rendered(sampleInitialHTML);
+  
+  // Apply title diff
+  rendered.applyDiff(samplePageTitleDiff);
+  
+  // Verify title appears in HTML
+  const html = rendered.getFullHTML();
+  assert.ok(html.includes("<title>Updated Todo List via K6</title>"), "Should update title tag in HTML");
+});
+
 test("Todo list title edit diff application", () => {
   const rendered = new Rendered(sampleInitialHTML);
 
@@ -372,6 +396,22 @@ test("Add item after todo list title change", () => {
   
   // Should contain the new task input
   assert.ok(htmlAfterAdd.includes('New task'), "Should contain new task after add item diff");
+});
+
+test("Combined content and page title update", () => {
+  const rendered = new Rendered(sampleInitialHTML);
+
+  // Apply content change and title change together
+  const combinedDiff = {
+    ...sampleTodoListTitleSaveDiff,
+    ...samplePageTitleDiff
+  };
+  
+  const html = rendered.applyDiff(combinedDiff);
+  
+  // Should update both the content and page title
+  assert.ok(html.includes("Updated Todo List via K6"), "Should contain updated content title");
+  assert.ok(html.includes("<title>Updated Todo List via K6</title>"), "Should update page title tag in HTML");
 });
 
 test("Direct HTML generation", () => {
@@ -536,4 +576,61 @@ test("Template reference chain resolution", () => {
   
   assert.ok(chainHTML.includes("Base content"), "Should render base component");
   assert.ok(chainHTML.includes("Shared content"), "Should render shared template component");
+});
+
+test("Complete todo list workflow with page title updates", () => {
+  const rendered = new Rendered(sampleInitialHTML);
+  
+  // Step 1: Verify initial title in HTML
+  let html = rendered.getFullHTML();
+  assert.ok(html.includes("<title>TodoLister</title>"), "Should start with TodoLister title in HTML");
+  
+  // Step 2: Edit the title (UI shows input form)
+  rendered.applyDiff(sampleTodoListTitleEditDiff);
+  html = rendered.getFullHTML();
+  assert.ok(html.includes("form"), "Should show edit form");
+  assert.ok(html.includes("<title>TodoLister</title>"), "Page title unchanged during edit");
+  
+  // Step 3: Save the title (both content and page title update)
+  const saveWithTitleDiff = {
+    ...sampleTodoListTitleSaveDiff,
+    t: "Updated Todo List via K6"  // Phoenix sends both content and title updates
+  };
+  rendered.applyDiff(saveWithTitleDiff);
+  html = rendered.getFullHTML();
+  
+  // Verify both content and page title are updated in HTML
+  assert.ok(html.includes("Updated Todo List via K6"), "Should show updated title in content");
+  assert.ok(html.includes("<title>Updated Todo List via K6</title>"), "Should update page title tag in HTML");
+  
+  // Step 4: Add an item (content changes but title remains)
+  rendered.applyDiff(sampleAddItemDiff);
+  html = rendered.getFullHTML();
+  
+  assert.ok(html.includes("New task"), "Should show new task");
+  assert.ok(html.includes("<title>Updated Todo List via K6</title>"), "Page title tag should remain updated in HTML");
+});
+
+test("Phoenix LiveView extract pattern compliance", () => {
+  // Test that our extract method works like Phoenix LiveView's
+  const diffWithTitle = {
+    t: "My Page Title",
+    e: [["click", "button"]],
+    r: { ok: true },
+    3: { s: ["<div>", "</div>"] }
+  };
+  
+  // Extract should remove t, e, r and return them separately
+  const { diff, title, reply, events } = Rendered.extract(diffWithTitle);
+  
+  // Verify extracted values
+  assert.strictEqual(title, "My Page Title", "Should extract title");
+  assert.deepStrictEqual(reply, { ok: true }, "Should extract reply");
+  assert.deepStrictEqual(events, [["click", "button"]], "Should extract events");
+  
+  // Verify clean diff (without t, e, r)
+  assert.deepStrictEqual(diff, { 3: { s: ["<div>", "</div>"] } }, "Should return clean diff");
+  
+  // Verify original diff is not mutated
+  assert.ok(diffWithTitle.hasOwnProperty('t'), "Original diff should still have title");
 });
