@@ -155,6 +155,43 @@ const addFirstTodoListItem = (ctx, next) => {
   });
 };
 
+const clickRefreshButton = (ctx, next) => {
+  if (!ctx.listLiveView || !ctx.listConnected) {
+    next();
+    return;
+  }
+
+  ctx.listLiveView.pushClick("refresh", {}, (type, response) => {
+    if (type === "message") {
+      // Check if refresh button is disabled immediately after clicking
+      const html = ctx.listLiveView.getHtml();
+      const doc = parseHTML(html);
+      const refreshButton = doc.find('button[phx-click="refresh"]');
+      ctx.refreshButtonDisabledAfterClick =
+        refreshButton.size() > 0 &&
+        refreshButton.attr("disabled") !== undefined;
+
+      ctx.listLiveView.channel.socket.setTimeout(() => {
+        next();
+      }, 2500);
+    } else {
+      next();
+    }
+  });
+};
+
+const waitForRefreshComplete = (ctx, next) => {
+  const html = ctx.listLiveView.getHtml();
+  const doc = parseHTML(html);
+
+  // Check if refresh button is back to being enabled (no disabled attribute)
+  const refreshButton = doc.find('button[phx-click="refresh"]');
+  ctx.refreshButtonReEnabled =
+    refreshButton.size() > 0 && !refreshButton.attr("disabled");
+
+  next();
+};
+
 const leaveListPage = createLeaveLiveViewStep({
   liveViewKey: "listLiveView",
 });
@@ -179,6 +216,8 @@ export default function () {
     initialListTitleCorrect: false,
     updatedPageTitle: null,
     pageTitleCorrectAfterChange: false,
+    refreshButtonDisabledAfterClick: false,
+    refreshButtonReEnabled: false,
   };
 
   // Define steps
@@ -190,6 +229,8 @@ export default function () {
     .addStep("Edit title", editTitle)
     .addStep("Save title", saveTitle)
     .addStep("Add first todo list item", addFirstTodoListItem)
+    .addStep("Click refresh button", clickRefreshButton)
+    .addStep("Wait for refresh complete", waitForRefreshComplete)
     .addStep("Leave list page", leaveListPage);
 
   // Define checks
@@ -219,6 +260,14 @@ export default function () {
     .addCheck(
       "First Todo List Item was added",
       (ctx) => ctx.addFirstTodoListItem === true,
+    )
+    .addCheck(
+      "Refresh button disabled after click",
+      (ctx) => ctx.refreshButtonDisabledAfterClick === true,
+    )
+    .addCheck(
+      "Refresh button re-enabled after async cycle",
+      (ctx) => ctx.refreshButtonReEnabled === true,
     );
 
   // Run the scenario
