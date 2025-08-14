@@ -46,6 +46,18 @@ defmodule TodoListerWeb.TodoListLiveTest do
       assert html =~ "No todo items yet"
       assert html =~ "Click the + button to add your first task!"
     end
+
+    test "sets page title to todo list title", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Check that page title contains the todo list title and suffix
+      page_title_text = page_title(view)
+      assert page_title_text =~ todo_list.title
+      assert page_title_text =~ "Todo Lister"
+      # Verify the title tag contains both title and suffix
+      assert html =~ todo_list.title
+      assert html =~ "Todo Lister"
+    end
   end
 
   describe "Share functionality" do
@@ -85,6 +97,9 @@ defmodule TodoListerWeb.TodoListLiveTest do
     test "can save title changes", %{conn: conn, todo_list: todo_list} do
       {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
 
+      # Verify initial page title contains the original title
+      assert page_title(view) =~ todo_list.title
+
       # Enter edit mode
       view |> element("div[phx-click='edit_title']") |> render_click()
 
@@ -95,6 +110,9 @@ defmodule TodoListerWeb.TodoListLiveTest do
         |> render_submit(%{title: "Updated Title"})
 
       assert html =~ "Updated Title"
+      
+      # Verify the page title was updated to contain the new title
+      assert page_title(view) =~ "Updated Title"
 
       # Verify the title was actually updated in the database
       updated_list = TodoLister.Lists.get_todo_list!(todo_list.id)
@@ -137,6 +155,10 @@ defmodule TodoListerWeb.TodoListLiveTest do
       {:ok, view1, _html} = live(conn, ~p"/tl/#{todo_list.id}")
       {:ok, view2, _html} = live(conn, ~p"/tl/#{todo_list.id}")
 
+      # Verify initial page titles contain the original title
+      assert page_title(view1) =~ todo_list.title
+      assert page_title(view2) =~ todo_list.title
+
       # Update title in first client
       view1 |> element("div[phx-click='edit_title']") |> render_click()
 
@@ -147,6 +169,10 @@ defmodule TodoListerWeb.TodoListLiveTest do
       # Verify both clients show the updated title
       assert render(view1) =~ "PubSub Updated Title"
       assert render(view2) =~ "PubSub Updated Title"
+      
+      # Verify both clients have updated page titles
+      assert page_title(view1) =~ "PubSub Updated Title"
+      assert page_title(view2) =~ "PubSub Updated Title"
     end
 
     test "title editing behaves like item editing - seamless input", %{

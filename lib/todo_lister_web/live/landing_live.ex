@@ -7,7 +7,7 @@ defmodule TodoListerWeb.LandingLive do
   def mount(_params, _session, socket) do
     # Extract client_id from connection params and store in assigns
     client_id = get_connect_params(socket)["client_id"]
-    {:ok, assign(socket, client_id: client_id)}
+    {:ok, assign(socket, client_id: client_id, page_title: "Home")}
   end
 
   @impl true
