@@ -21,7 +21,7 @@ const sampleInitialHTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-const sampleTitleEditDiff = {
+const sampleTodoListTitleEditDiff = {
   3: {
     0: ' value="New Todo List"',
     s: [
@@ -31,7 +31,7 @@ const sampleTitleEditDiff = {
   },
 };
 
-const sampleTitleSaveDiff = {
+const sampleTodoListTitleSaveDiff = {
   3: {
     s: [
       '\n                <h1 class="text-3xl font-bold">\n                  Updated Todo List via K6\n                </h1>\n              ',
@@ -338,33 +338,33 @@ test("Initial rendering", () => {
   assert.ok(!html.includes("New Todo List"), "Should not contain original server-rendered content");
 });
 
-test("Title edit diff application", () => {
+test("Todo list title edit diff application", () => {
   const rendered = new Rendered(sampleInitialHTML);
 
   // Apply the title edit diff (shows form)
-  const htmlAfterEdit = rendered.applyDiff(sampleTitleEditDiff);
+  const htmlAfterEdit = rendered.applyDiff(sampleTodoListTitleEditDiff);
 
   assert.ok(htmlAfterEdit.includes("<form"), "Should contain form after edit diff");
   assert.strictEqual(countOccurrences(htmlAfterEdit, "New Todo List"), 1, "Should have exactly one occurrence of 'New Todo List'");
 });
 
-test("Title save diff application", () => {
+test("Todo list title save diff application", () => {
   const rendered = new Rendered(sampleInitialHTML);
 
   // Apply edit then save
-  rendered.applyDiff(sampleTitleEditDiff);
-  const htmlAfterSave = rendered.applyDiff(sampleTitleSaveDiff);
+  rendered.applyDiff(sampleTodoListTitleEditDiff);
+  const htmlAfterSave = rendered.applyDiff(sampleTodoListTitleSaveDiff);
 
   assert.ok(htmlAfterSave.includes("Updated Todo List via K6"), "Should contain updated title");
   assert.strictEqual(countOccurrences(htmlAfterSave, "Updated Todo List via K6"), 1, "Should have exactly one occurrence of updated title");
 });
 
-test("Add item after title change", () => {
+test("Add item after todo list title change", () => {
   const rendered = new Rendered(sampleInitialHTML);
 
   // Apply the full sequence: edit -> save -> add item
-  rendered.applyDiff(sampleTitleEditDiff);
-  rendered.applyDiff(sampleTitleSaveDiff);
+  rendered.applyDiff(sampleTodoListTitleEditDiff);
+  rendered.applyDiff(sampleTodoListTitleSaveDiff);
   const htmlAfterAdd = rendered.applyDiff(sampleAddItemDiff);
 
   // The title should still be there and not duplicated
@@ -395,8 +395,8 @@ test("No duplication in final HTML", () => {
   const rendered = new Rendered(sampleInitialHTML);
 
   // Apply full sequence
-  rendered.applyDiff(sampleTitleEditDiff);
-  rendered.applyDiff(sampleTitleSaveDiff);
+  rendered.applyDiff(sampleTodoListTitleEditDiff);
+  rendered.applyDiff(sampleTodoListTitleSaveDiff);
   rendered.applyDiff(sampleAddItemDiff);
   
   const finalHTML = rendered.getFullHTML();
