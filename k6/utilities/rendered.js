@@ -45,6 +45,7 @@ export default class Rendered {
     
     // Page title state - extracted from initial HTML and updated via diffs
     this.pageTitle = this.extractInitialPageTitle(initialHTML);
+    this.titleSuffix = null; // Will be set by extractInitialPageTitle if found
   }
 
   /**
@@ -121,7 +122,15 @@ export default class Rendered {
     const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/i);
     if (titleMatch) {
       // Clean up whitespace and extract just the text content
-      return titleMatch[1].replace(/\s+/g, ' ').trim();
+      const fullTitle = titleMatch[1].replace(/\s+/g, ' ').trim();
+      
+      // Extract suffix pattern (e.g., " | Todo Lister" from "Home | Todo Lister")
+      const suffixMatch = fullTitle.match(/^(.+?)(\s*\|\s*.+)$/);
+      if (suffixMatch) {
+        this.titleSuffix = suffixMatch[2]; // Store the suffix for later use
+      }
+      
+      return fullTitle;
     }
     return null;
   }
@@ -282,10 +291,28 @@ export default class Rendered {
       return html;
     }
     
+    // If we don't have a suffix yet, try to detect it from the current HTML
+    if (!this.titleSuffix) {
+      const currentTitleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
+      if (currentTitleMatch) {
+        const currentTitle = currentTitleMatch[1].replace(/\s+/g, ' ').trim();
+        const suffixMatch = currentTitle.match(/^(.+?)(\s*\|\s*.+)$/);
+        if (suffixMatch) {
+          this.titleSuffix = suffixMatch[2];
+        }
+      }
+    }
+    
+    // Apply suffix if we have one and the title doesn't already include it
+    let fullTitle = this.pageTitle;
+    if (this.titleSuffix && !fullTitle.includes(this.titleSuffix.trim())) {
+      fullTitle = fullTitle + this.titleSuffix;
+    }
+    
     // Replace the content of the <title> tag
     return html.replace(
-      /<title[^>]*>.*?<\/title>/i,
-      `<title>${this.pageTitle}</title>`
+      /<title[^>]*>.*?<\/title>/is,
+      `<title>${fullTitle}</title>`
     );
   }
 
