@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --test test-rendered.js"
+    "test": "node --test test-rendered.js test-rendered-legacy.js",
+    "test:modern": "node --test test-rendered.js",
+    "test:legacy": "node --test test-rendered-legacy.js"
   },
   "devDependencies": {
     "jsdom": "^24.0.0"
