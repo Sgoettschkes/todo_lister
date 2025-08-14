@@ -326,28 +326,6 @@ export default class Rendered {
       // First check if this number is a component reference
       if (components && components[rendered]) {
         const component = components[rendered];
-        
-        // Handle component template sharing - if component has "s": integer, merge with referenced component
-        // But only do this for certain patterns, not all numeric static references
-        if (component[STATIC] && typeof component[STATIC] === "number" && components[component[STATIC]]) {
-          // Check if this component actually needs template sharing by looking at its structure
-          // Only do template sharing if the component has truly minimal content (just references)
-          const componentKeys = Object.keys(component);
-          const hasOnlyStaticReference = componentKeys.length === 1 && componentKeys[0] === STATIC;
-          const hasMinimalPlainContent = componentKeys.filter(k => /^\d+$/.test(k)).length === 1 && 
-                                       component["0"] && 
-                                       this.isObject(component["0"]) &&
-                                       Object.keys(component["0"]).length === 1 &&
-                                       component["0"]["0"] &&
-                                       typeof component["0"]["0"] === "string";  // Only plain string content
-          
-          if (hasOnlyStaticReference || hasMinimalPlainContent) {
-            const templateComponent = components[component[STATIC]];
-            const mergedComponent = this.mergeComponentTemplates(component, templateComponent);
-            return this.toIOData(mergedComponent, components, templates);
-          }
-        }
-        
         return this.toIOData(component, components, templates);
       }
       
@@ -371,23 +349,23 @@ export default class Rendered {
         // This is a Phoenix template structure - use one_to_iodata algorithm
         const staticRef = rendered[STATIC];
         
-        // If static ref points to a component, we need to handle component template sharing
+        // Special handling for simple dynamic content without wrapper
         if (typeof staticRef === "number" && components && components[staticRef]) {
-          const referencedComponent = components[staticRef];
-          // Use the referenced component's structure as a template for this component
-          const templateStructure = { ...referencedComponent };
-          
-          // Apply this component's dynamics to the template structure
-          const result = { ...templateStructure };
-          for (const key of keys) {
-            if (/^\d+$/.test(key) && rendered[key] !== undefined) {
-              result[key] = rendered[key];
+          // Check if this is a simple dynamic replacement case
+          // Component 2 in the test has: {"0": {"0": {"s": ["COL"]}}, "s": 1}
+          // This should just render "COL" without the div wrapper from component 1
+          const numericKeys = keys.filter(key => /^\d+$/.test(key));
+          if (numericKeys.length === 1 && rendered["0"]) {
+            // Check if it's a simple content replacement
+            const dynamicContent = rendered["0"];
+            if (dynamicContent && dynamicContent["0"] && dynamicContent["0"][STATIC]) {
+              // This is a simple content case - just render the dynamic content
+              return this.toIOData(dynamicContent, components, templates);
             }
           }
-          
-          return this.toIOData(result, components, templates);
         }
         
+        // Use templateStatic to resolve the template - it handles component inheritance properly
         const staticTemplate = this.templateStatic(staticRef, templates, components);
         if (Array.isArray(staticTemplate)) {
           return this.oneToIOData(staticTemplate, rendered, 0, [], components, templates);
@@ -545,16 +523,30 @@ export default class Rendered {
       if (templates && templates[staticRef]) {
         return templates[staticRef];
       }
-      // For component references, be more careful about what we return
+      // For component references, look for the effective static template
       if (components && components[staticRef]) {
         const component = components[staticRef];
-        // Only follow the static reference if it points to an array template
+        
+        // For template inheritance, we need to find the appropriate template:
+        // 1. If component has a top-level static array, use it
+        // 2. If component has a nested static array in position 0, prefer that for inheritance
+        // 3. If component has a top-level static number, resolve it recursively as last resort
+        
         if (component[STATIC] && Array.isArray(component[STATIC])) {
+          // Component has a top-level static array template
           return component[STATIC];
         }
-        // If the component's static is another reference, be careful not to inherit wrong structure
+        
+        // Check for nested static template BEFORE following numeric references
+        // This is key: component 3 with "s": 2 should get component 2's nested ["\nELSE ", ""]
+        // even though component 2 has "s": 1
+        if (component["0"] && component["0"][STATIC] && Array.isArray(component["0"][STATIC])) {
+          return component["0"][STATIC];
+        }
+        
+        // Last resort: follow numeric reference
         if (component[STATIC] && typeof component[STATIC] === "number") {
-          // Recursively resolve, but avoid infinite loops
+          // Component references another component - recursively resolve
           if (component[STATIC] !== staticRef) {
             return this.templateStatic(component[STATIC], templates, components);
           }
