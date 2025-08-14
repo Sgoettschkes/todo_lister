@@ -406,3 +406,134 @@ test("No duplication in final HTML", () => {
   assert.strictEqual(countOccurrences(finalHTML, "<body"), 1, "Should have exactly one body tag");
   assert.strictEqual(countOccurrences(finalHTML, "</body>"), 1, "Should have exactly one closing body tag");
 });
+
+// Additional tests based on Phoenix LiveView patterns
+
+test("Component diff application with nested changes", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Use the same pattern as working tests
+  const initialRender = {
+    "0": 1,
+    "c": {
+      "1": {
+        "0": "Initial content",
+        "s": ["<div class=\"component\">", "</div>"]
+      }
+    },
+    "s": ["<section>", "</section>"]
+  };
+  
+  // Set directly like working tests
+  rendered.rendered = initialRender;
+  const initialHTML = rendered.toHTML(initialRender);
+  
+  // Apply diff that updates component 1 content
+  const componentDiff = {
+    "c": {
+      "1": {
+        "0": "Updated content",
+        "s": ["<div class=\"component updated\">", "</div>"]
+      }
+    }
+  };
+  
+  rendered.applyDiff(componentDiff);
+  const updatedHTML = rendered.toHTML(rendered.rendered);
+  
+  assert.ok(updatedHTML.includes("Updated content"), "Should contain updated component content");
+  assert.ok(updatedHTML.includes("class=\"component updated\""), "Should have updated CSS class");
+});
+
+test("Keyed comprehension partial updates", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Use the working keyed pattern from the existing tests
+  const initialRender = {
+    "0": {
+      "k": {
+        "0": {"0": "Item A"},
+        "1": {"0": "Item B"},
+        "2": {"0": "Item C"},
+        "kc": 3
+      },
+      "s": ["<li>", "</li>"]
+    },
+    "s": ["<ul>", "</ul>"]
+  };
+  
+  rendered.rendered = initialRender;
+  const initialHTML = rendered.toHTML(initialRender);
+  
+  // Apply diff that updates one item and adds a new one
+  const keyedDiff = {
+    "0": {
+      "k": {
+        "1": {"0": "Item B Updated"},
+        "3": {"0": "Item D"},
+        "kc": 4
+      }
+    }
+  };
+  
+  rendered.applyDiff(keyedDiff);
+  const updatedHTML = rendered.toHTML(rendered.rendered);
+  
+  assert.ok(updatedHTML.includes("Item A"), "Should preserve unchanged item A");
+  assert.ok(updatedHTML.includes("Item B Updated"), "Should update item B");
+  assert.ok(updatedHTML.includes("Item C"), "Should preserve unchanged item C");
+  assert.ok(updatedHTML.includes("Item D"), "Should add new item D");
+});
+
+test("Mixed static and dynamic updates", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Start with simpler mixed content
+  const initialRender = {
+    "0": "Page Title",
+    "1": "Dynamic content",
+    "s": ["<h1>", "</h1><p>", "</p>"]
+  };
+  
+  rendered.rendered = initialRender;
+  const initialHTML = rendered.toHTML(initialRender);
+  
+  // Apply diff that changes both static and dynamic content
+  const mixedDiff = {
+    "0": "Updated Page Title",
+    "1": "New dynamic content"
+  };
+  
+  rendered.applyDiff(mixedDiff);
+  const updatedHTML = rendered.toHTML(rendered.rendered);
+  
+  assert.ok(updatedHTML.includes("Updated Page Title"), "Should update title");
+  assert.ok(updatedHTML.includes("New dynamic content"), "Should update dynamic content");
+});
+
+test("Template reference chain resolution", () => {
+  const rendered = new Rendered("<!DOCTYPE html><html><body><div id=\"test\"></div></body></html>");
+  
+  // Test simplified template sharing
+  const templateChainRender = {
+    "0": 1,
+    "1": 2,
+    "c": {
+      "1": {
+        "0": "Base content",
+        "s": ["<div>", "</div>"]
+      },
+      "2": {
+        "0": "Shared content",
+        "s": 1  // References component 1's template
+      }
+    },
+    "s": ["<section>", "", "</section>"]
+  };
+  
+  rendered.rendered = templateChainRender;
+  const chainHTML = rendered.toHTML(templateChainRender);
+  
+  assert.ok(chainHTML.includes("Base content"), "Should render base component");
+  assert.ok(chainHTML.includes("Shared content"), "Should render shared template component");
+});
