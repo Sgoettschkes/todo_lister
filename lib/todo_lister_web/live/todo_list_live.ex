@@ -43,6 +43,7 @@ defmodule TodoListerWeb.TodoListLive do
       |> assign(:confirming_delete_id, nil)
       |> assign(:client_id, client_id)
       |> assign(:history, history)
+      |> assign(:refresh_loading, false)
 
     {:ok, socket}
   end
@@ -108,6 +109,17 @@ defmodule TodoListerWeb.TodoListLive do
   def handle_event("copy_share_link", _params, socket) do
     {:noreply,
      put_flash(socket, :info, "Link copied! Share this URL with others to collaborate.")}
+  end
+
+  @impl true
+  def handle_event("refresh", _params, socket) do
+    # Immediately disable the refresh button
+    socket = assign(socket, :refresh_loading, true)
+    
+    # Schedule the data reload after 1 second
+    Process.send_after(self(), :perform_refresh, 1000)
+    
+    {:noreply, socket}
   end
 
   @impl true
@@ -388,6 +400,31 @@ defmodule TodoListerWeb.TodoListLive do
   end
 
   @impl true
+  def handle_info(:perform_refresh, socket) do
+    # Reload all data from database
+    updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
+    updated_history = History.get_list_history(socket.assigns.todo_list.id, limit: 20)
+    
+    socket =
+      socket
+      |> assign(:todo_list, updated_todo_list)
+      |> assign(:todo_items, updated_todo_list.todo_items)
+      |> assign(:history, updated_history)
+      |> assign(:page_title, updated_todo_list.title)
+      |> put_flash(:info, "List refreshed")
+    
+    # Schedule re-enabling the button after another second
+    Process.send_after(self(), :enable_refresh, 1000)
+    
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(:enable_refresh, socket) do
+    {:noreply, assign(socket, :refresh_loading, false)}
+  end
+
+  @impl true
   def handle_info({:updated, sender_pid}, socket) do
     if sender_pid == self() do
       # Ignore updates from this same process to avoid showing "another user" message
@@ -585,6 +622,33 @@ defmodule TodoListerWeb.TodoListLive do
                         d="M12 4v16m8-8H4"
                       />
                     </svg>
+                  </button>
+                  <button
+                    phx-click="refresh"
+                    class={[
+                      "btn btn-circle btn-primary",
+                      @refresh_loading && "loading btn-disabled opacity-50",
+                      !@refresh_loading && "bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600"
+                    ]}
+                    disabled={@refresh_loading}
+                    title={if @refresh_loading, do: "Refreshing...", else: "Refresh list"}
+                  >
+                    <%= if !@refresh_loading do %>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-6 w-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                        />
+                      </svg>
+                    <% end %>
                   </button>
                   <button
                     phx-click="copy_share_link"
