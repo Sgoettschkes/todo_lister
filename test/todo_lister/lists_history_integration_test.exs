@@ -26,7 +26,8 @@ defmodule TodoLister.ListsHistoryIntegrationTest do
     test "update_todo_list/3 records history for title changes" do
       {:ok, todo_list} = Lists.create_todo_list(%{title: "Original Title"})
 
-      {:ok, _updated_list} = Lists.update_todo_list(todo_list, %{title: "New Title"}, "editor-456")
+      {:ok, _updated_list} =
+        Lists.update_todo_list(todo_list, %{title: "New Title"}, "editor-456")
 
       history = History.get_list_history(todo_list.id)
       assert length(history) == 1

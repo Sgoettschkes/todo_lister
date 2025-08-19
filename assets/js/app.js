@@ -244,6 +244,36 @@ const Hooks = {
         }
       })
     }
+  },
+  FocusCountdown: {
+    mounted() {
+      this.endTime = parseInt(this.el.dataset.endTime);
+      this.updateTimer();
+      this.interval = setInterval(() => this.updateTimer(), 1000);
+    },
+    
+    destroyed() {
+      if (this.interval) {
+        clearInterval(this.interval);
+      }
+    },
+    
+    updateTimer() {
+      const now = Math.floor(Date.now() / 1000);
+      const remaining = Math.max(0, this.endTime - now);
+      
+      if (remaining <= 0) {
+        this.el.textContent = "00:00";
+        if (this.interval) {
+          clearInterval(this.interval);
+        }
+        return;
+      }
+      
+      const minutes = Math.floor(remaining / 60);
+      const seconds = remaining % 60;
+      this.el.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
   }
 }
 
@@ -258,6 +288,31 @@ const liveSocket = new LiveSocket("/live", Socket, {
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
+
+// Handle focus timer completion
+window.addEventListener("phx:focus-complete", (e) => {
+  // Reset body background
+  document.body.style.backgroundColor = "";
+  
+  // Show completion message
+  const message = e.detail.message || "Focus time complete!";
+  
+  // Create a temporary toast notification
+  const toast = document.createElement("div");
+  toast.className = "fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 translate-x-full";
+  toast.textContent = message;
+  
+  document.body.appendChild(toast);
+  
+  // Slide in
+  setTimeout(() => toast.classList.remove("translate-x-full"), 100);
+  
+  // Slide out and remove after 3 seconds
+  setTimeout(() => {
+    toast.classList.add("translate-x-full");
+    setTimeout(() => document.body.removeChild(toast), 300);
+  }, 3000);
+})
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()

@@ -44,6 +44,9 @@ defmodule TodoListerWeb.TodoListLive do
       |> assign(:client_id, client_id)
       |> assign(:history, history)
       |> assign(:refresh_loading, false)
+      |> assign(:focus_timer, %{item_id: nil, timer_ref: nil, show_modal: false})
+      |> assign(:focus_item_id, nil)
+      |> assign(:focus_end_time, nil)
 
     {:ok, socket}
   end
@@ -115,10 +118,10 @@ defmodule TodoListerWeb.TodoListLive do
   def handle_event("refresh", _params, socket) do
     # Immediately disable the refresh button
     socket = assign(socket, :refresh_loading, true)
-    
+
     # Schedule the data reload after 1 second
     Process.send_after(self(), :perform_refresh, 1000)
-    
+
     {:noreply, socket}
   end
 
@@ -400,11 +403,81 @@ defmodule TodoListerWeb.TodoListLive do
   end
 
   @impl true
+  def handle_event("start_focus_timer", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :focus_timer, %{item_id: id, timer_ref: nil, show_modal: true})}
+  end
+
+  @impl true
+  def handle_event("cancel_focus_timer", _params, socket) do
+    {:noreply, assign(socket, :focus_timer, %{item_id: nil, timer_ref: nil, show_modal: false})}
+  end
+
+  @impl true
+  def handle_event(
+        "set_focus_timer",
+        %{"item_id" => id, "minutes" => min_str, "seconds" => sec_str},
+        socket
+      ) do
+    minutes = String.to_integer(min_str || "0")
+    seconds = String.to_integer(sec_str || "0")
+    total_seconds = minutes * 60 + seconds
+
+    if total_seconds > 0 do
+      # Cancel existing timer if any
+      if socket.assigns.focus_timer.timer_ref do
+        Process.cancel_timer(socket.assigns.focus_timer.timer_ref)
+      end
+
+      # Start new timer
+      timer_ref = Process.send_after(self(), {:focus_timer_complete, id}, total_seconds * 1000)
+      end_time = System.system_time(:second) + total_seconds
+
+      socket =
+        socket
+        |> assign(:focus_timer, %{item_id: nil, timer_ref: timer_ref, show_modal: false})
+        |> assign(:focus_item_id, id)
+        |> assign(:focus_end_time, end_time)
+
+      {:noreply, socket}
+    else
+      {:noreply, put_flash(socket, :error, "Please enter a valid time")}
+    end
+  end
+
+  @impl true
+  def handle_event("stop_focus_timer", _params, socket) do
+    # Cancel the timer if it exists
+    if socket.assigns.focus_timer.timer_ref do
+      Process.cancel_timer(socket.assigns.focus_timer.timer_ref)
+    end
+
+    socket =
+      socket
+      |> assign(:focus_timer, %{item_id: nil, timer_ref: nil, show_modal: false})
+      |> assign(:focus_item_id, nil)
+      |> assign(:focus_end_time, nil)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:focus_timer_complete, item_id}, socket) do
+    socket =
+      socket
+      |> assign(:focus_timer, %{item_id: nil, timer_ref: nil, show_modal: false})
+      |> assign(:focus_item_id, nil)
+      |> assign(:focus_end_time, nil)
+      |> push_event("focus-complete", %{item_id: item_id, message: "Focus time complete!"})
+
+    {:noreply, socket}
+  end
+
+  @impl true
   def handle_info(:perform_refresh, socket) do
     # Reload all data from database
     updated_todo_list = Lists.get_todo_list_with_items!(socket.assigns.todo_list.id)
     updated_history = History.get_list_history(socket.assigns.todo_list.id, limit: 20)
-    
+
     socket =
       socket
       |> assign(:todo_list, updated_todo_list)
@@ -412,10 +485,10 @@ defmodule TodoListerWeb.TodoListLive do
       |> assign(:history, updated_history)
       |> assign(:page_title, updated_todo_list.title)
       |> put_flash(:info, "List refreshed")
-    
+
     # Schedule re-enabling the button after another second
     Process.send_after(self(), :enable_refresh, 1000)
-    
+
     {:noreply, socket}
   end
 
@@ -628,7 +701,8 @@ defmodule TodoListerWeb.TodoListLive do
                     class={[
                       "btn btn-circle btn-primary",
                       @refresh_loading && "loading btn-disabled opacity-50",
-                      !@refresh_loading && "bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600"
+                      !@refresh_loading &&
+                        "bg-orange-500 border-orange-500 hover:bg-orange-600 hover:border-orange-600"
                     ]}
                     disabled={@refresh_loading}
                     title={if @refresh_loading, do: "Refreshing...", else: "Refresh list"}
@@ -818,6 +892,31 @@ defmodule TodoListerWeb.TodoListLive do
                       
     <!-- Action Buttons -->
                       <div class="flex gap-1">
+                        <!-- Focus Timer Button -->
+                        <%= if @focus_item_id != item.id do %>
+                          <button
+                            phx-click="start_focus_timer"
+                            phx-value-id={item.id}
+                            class="btn btn-ghost btn-xs text-gray-500 hover:text-blue-600 px-1 py-3"
+                            title="Start focus timer"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              class="h-5 w-5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                          </button>
+                        <% end %>
+
                         <%= if item.status != :wont_do do %>
                           <button
                             phx-click="soft_delete"
@@ -931,6 +1030,84 @@ defmodule TodoListerWeb.TodoListLive do
         </div>
       </div>
     </div>
+
+    <!-- Focus Timer Modal -->
+    <%= if @focus_timer.show_modal do %>
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full mx-4">
+          <h3 class="text-lg font-semibold mb-4">Set Focus Timer</h3>
+          <form phx-submit="set_focus_timer" phx-value-item_id={@focus_timer.item_id}>
+            <div class="flex gap-2 mb-4">
+              <div class="flex-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Minutes</label>
+                <input
+                  type="number"
+                  name="minutes"
+                  min="0"
+                  max="99"
+                  value="5"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                />
+              </div>
+              <div class="flex-1">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Seconds</label>
+                <input
+                  type="number"
+                  name="seconds"
+                  min="0"
+                  max="59"
+                  value="0"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 bg-white"
+                />
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button
+                type="submit"
+                class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                Start Timer
+              </button>
+              <button
+                type="button"
+                phx-click="cancel_focus_timer"
+                class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- Focus Mode -->
+    <%= if @focus_item_id do %>
+      <div class="fixed inset-0 bg-gray-500 z-50 flex items-center justify-center" id="focus-mode">
+        <div class="text-center">
+          <h1 class="text-4xl font-bold text-white mb-8">
+            {Enum.find(@todo_items, &(&1.id == @focus_item_id)).text}
+          </h1>
+          <div
+            class="text-6xl font-mono text-white mb-8"
+            phx-hook="FocusCountdown"
+            id="countdown-timer"
+            data-end-time={@focus_end_time}
+          >
+            --:--
+          </div>
+          <button
+            phx-click="stop_focus_timer"
+            class="bg-white text-gray-800 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+          >
+            Stop Focus
+          </button>
+        </div>
+      </div>
+      <style>
+        body { background-color: #6b7280 !important; }
+      </style>
+    <% end %>
     """
   end
 end

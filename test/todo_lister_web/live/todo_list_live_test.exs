@@ -110,7 +110,7 @@ defmodule TodoListerWeb.TodoListLiveTest do
         |> render_submit(%{title: "Updated Title"})
 
       assert html =~ "Updated Title"
-      
+
       # Verify the page title was updated to contain the new title
       assert page_title(view) =~ "Updated Title"
 
@@ -169,7 +169,7 @@ defmodule TodoListerWeb.TodoListLiveTest do
       # Verify both clients show the updated title
       assert render(view1) =~ "PubSub Updated Title"
       assert render(view2) =~ "PubSub Updated Title"
-      
+
       # Verify both clients have updated page titles
       assert page_title(view1) =~ "PubSub Updated Title"
       assert page_title(view2) =~ "PubSub Updated Title"
@@ -382,6 +382,203 @@ defmodule TodoListerWeb.TodoListLiveTest do
       db_list = TodoLister.Repo.get!(TodoLister.TodoList, todo_list.id)
       assert db_list.title == todo_list.title
       assert not is_nil(db_list.deleted_at)
+    end
+  end
+
+  describe "Focus Timer" do
+    test "displays focus timer button on todo items", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Add a todo item first
+      view |> element("button[phx-click='add_item']") |> render_click()
+
+      html = render(view)
+
+      # Check for timer icon button
+      assert html =~ "phx-click=\"start_focus_timer\""
+      assert html =~ "title=\"Start focus timer\""
+    end
+
+    test "clicking focus timer button shows modal", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Add a todo item first
+      view |> element("button[phx-click='add_item']") |> render_click()
+
+      # Find the timer button and click it
+      html =
+        view
+        |> element("button[phx-click='start_focus_timer']")
+        |> render_click()
+
+      # Should show the timer modal
+      assert html =~ "Set Focus Timer"
+      assert html =~ "Minutes"
+      assert html =~ "Seconds"
+      assert html =~ "Start Timer"
+      assert html =~ "Cancel"
+    end
+
+    test "can cancel focus timer modal", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Add a todo item and start timer setup
+      view |> element("button[phx-click='add_item']") |> render_click()
+      view |> element("button[phx-click='start_focus_timer']") |> render_click()
+
+      # Cancel the modal
+      html = view |> element("button[phx-click='cancel_focus_timer']") |> render_click()
+
+      # Modal should be gone
+      refute html =~ "Set Focus Timer"
+    end
+
+    test "can set focus timer with valid time", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Add a todo item and start timer setup
+      view |> element("button[phx-click='add_item']") |> render_click()
+      view |> element("button[phx-click='start_focus_timer']") |> render_click()
+
+      # Submit the timer form with 0 minutes and 2 seconds
+      html =
+        view
+        |> element("form[phx-submit='set_focus_timer']")
+        |> render_submit(%{minutes: "0", seconds: "2"})
+
+      # Modal should be gone and focus should be active
+      refute html =~ "Set Focus Timer"
+      assert html =~ "id=\"focus-mode\""
+      assert html =~ "Stop Focus"
+    end
+
+    test "rejects invalid timer duration", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Add a todo item and start timer setup
+      view |> element("button[phx-click='add_item']") |> render_click()
+      view |> element("button[phx-click='start_focus_timer']") |> render_click()
+
+      # Submit with invalid time (0 minutes, 0 seconds)
+      html =
+        view
+        |> element("form[phx-submit='set_focus_timer']")
+        |> render_submit(%{minutes: "0", seconds: "0"})
+
+      # Should show error message and keep modal open
+      assert html =~ "Please enter a valid time"
+      assert html =~ "Set Focus Timer"
+    end
+
+    test "can stop active focus timer", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Add item, start timer setup, and set timer
+      view |> element("button[phx-click='add_item']") |> render_click()
+      view |> element("button[phx-click='start_focus_timer']") |> render_click()
+
+      view
+      |> element("form[phx-submit='set_focus_timer']")
+      |> render_submit(%{minutes: "0", seconds: "5"})
+
+      # Stop the timer
+      html = view |> element("button[phx-click='stop_focus_timer']") |> render_click()
+
+      # Timer should be stopped
+      refute html =~ "id=\"focus-mode\""
+      refute html =~ "Stop Focus"
+      assert html =~ "Start focus timer"
+    end
+
+    test "focus timer completes and sends server event", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Add item, start timer with very short duration
+      view |> element("button[phx-click='add_item']") |> render_click()
+      view |> element("button[phx-click='start_focus_timer']") |> render_click()
+
+      view
+      |> element("form[phx-submit='set_focus_timer']")
+      |> render_submit(%{minutes: "0", seconds: "1"})
+
+      # Wait for the timer to complete (1 second + small buffer)
+      Process.sleep(1200)
+
+      # Check for focus-complete event in view events
+      assert_push_event(view, "focus-complete", payload)
+
+      # Verify event payload
+      assert payload.message == "Focus time complete!"
+      assert is_binary(payload.item_id)
+
+      # Verify focus is no longer active
+      html = render(view)
+      refute html =~ "id=\"focus-mode\""
+      refute html =~ "Stop Focus"
+      assert html =~ "Start focus timer"
+    end
+
+    test "focus timer handles multiple items correctly", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Add two todo items
+      view |> element("button[phx-click='add_item']") |> render_click()
+      view |> element("button[phx-click='add_item']") |> render_click()
+
+      html = render(view)
+
+      # Should have two timer buttons (2 occurrences + 1 for split = 3)
+      assert html |> String.split("Start focus timer") |> length() == 3
+
+      # Extract the first item ID from the HTML
+      [_, first_item_part] = String.split(html, "phx-value-id=\"", parts: 2)
+      [first_item_id, _] = String.split(first_item_part, "\"", parts: 2)
+
+      # Start timer on first item using specific ID
+      view
+      |> element("button[phx-click='start_focus_timer'][phx-value-id='#{first_item_id}']")
+      |> render_click()
+
+      view
+      |> element("form[phx-submit='set_focus_timer']")
+      |> render_submit(%{minutes: "0", seconds: "2"})
+
+      html = render(view)
+
+      # Should show focus mode
+      assert html =~ "id=\"focus-mode\""
+
+      # Should have one "Stop Focus" button in the focus overlay
+      # One occurrence
+      assert html |> String.split("Stop Focus") |> length() == 2
+
+      # The non-focused item should still have a start timer button (but not visible due to focus overlay)
+      # Focus mode covers the entire screen so individual timer buttons aren't functionally accessible
+    end
+
+    test "focus timer state is preserved across view updates", %{conn: conn, todo_list: todo_list} do
+      {:ok, view, _html} = live(conn, ~p"/tl/#{todo_list.id}")
+
+      # Add item and start timer
+      view |> element("button[phx-click='add_item']") |> render_click()
+      view |> element("button[phx-click='start_focus_timer']") |> render_click()
+
+      view
+      |> element("form[phx-submit='set_focus_timer']")
+      |> render_submit(%{minutes: "0", seconds: "5"})
+
+      # Perform another action (like editing title) which triggers re-render
+      view |> element("div[phx-click='edit_title']") |> render_click()
+
+      view
+      |> element("form[phx-submit='save_title']")
+      |> render_submit(%{title: "Updated Title"})
+
+      html = render(view)
+
+      # Focus timer should still be active
+      assert html =~ "id=\"focus-mode\""
+      assert html =~ "Stop Focus"
     end
   end
 end

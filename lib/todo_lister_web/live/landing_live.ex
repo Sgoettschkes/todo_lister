@@ -14,7 +14,7 @@ defmodule TodoListerWeb.LandingLive do
   def handle_event("create_list", _params, socket) do
     # Get client_id from socket assigns
     client_id = socket.assigns.client_id
-    
+
     case Lists.create_todo_list(%{title: "New Todo List"}, client_id) do
       {:ok, todo_list} ->
         {:noreply, push_navigate(socket, to: ~p"/tl/#{todo_list.id}")}
