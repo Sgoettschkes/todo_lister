@@ -11,6 +11,7 @@ export default class LiveView {
     this.channelParams = channelParams;
     this.channel = null;
     this.rendered = null;
+    this.events = [];
   }
 
   connect(callback = () => {}) {
@@ -104,8 +105,15 @@ export default class LiveView {
   }
 
   getHtml() {
-    // Return the full HTML document with LiveView content updated
     return this.rendered ? this.rendered.getFullHTML() : null;
+  }
+
+  getEvents() {
+    return this.events;
+  }
+
+  resetEvents() {
+    this.events = [];
   }
 
   _extractLiveViewMetadata(html) {
@@ -156,12 +164,12 @@ export default class LiveView {
     return (type, message) => {
       if (message.event === "phx_reply" && message.payload?.status === "ok") {
         if (message.payload.response?.rendered) {
-          // Apply the rendered response to update the HTML
           if (this.rendered) {
             this.rendered.applyRendered(message.payload.response.rendered);
           }
         } else if (message.payload.response?.diff) {
-          // Apply the diff to update the HTML
+          this._extractEvents(message.payload.response.diff);
+
           if (this.rendered) {
             this.rendered.applyDiff(message.payload.response.diff);
           }
@@ -175,11 +183,25 @@ export default class LiveView {
   _createBroadcastHandler() {
     return (type, message) => {
       if (message.event === "diff" && message.payload) {
-        // Apply broadcast diff to update the HTML
+        this._extractEvents(message.payload);
+
         if (this.rendered) {
           this.rendered.applyDiff(message.payload);
         }
       }
     };
+  }
+
+  _extractEvents(diff) {
+    if (diff && typeof diff === "object") {
+      const extracted = Rendered.extract(diff);
+      const timestamp = Date.now();
+      extracted.events.forEach((event) => {
+        this.events.push({
+          ...event,
+          timestamp: timestamp,
+        });
+      });
+    }
   }
 }

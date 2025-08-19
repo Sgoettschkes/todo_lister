@@ -171,6 +171,107 @@ const waitForRefreshComplete = (ctx, next) => {
   next();
 };
 
+const clickFocusTimer = (ctx, next) => {
+  if (!ctx.listLiveView || !ctx.listConnected) {
+    next();
+    return;
+  }
+
+  // Find the first timer button
+  const html = ctx.listLiveView.getHtml();
+  const doc = parseHTML(html);
+  const timerButton = doc.find('button[phx-click="start_focus_timer"]').first();
+
+  const itemId = timerButton.attr("phx-value-id");
+
+  ctx.listLiveView.pushClick(
+    "start_focus_timer",
+    { id: itemId },
+    (type, response) => {
+      if (type === "message") {
+        const updatedHtml = ctx.listLiveView.getHtml();
+        const updatedDoc = parseHTML(updatedHtml);
+
+        // Check if modal is shown
+        ctx.focusTimerModalShown =
+          updatedDoc.find("h3").text().includes("Set Focus Timer") &&
+          updatedDoc.find('input[name="minutes"]').size() > 0 &&
+          updatedDoc.find('input[name="seconds"]').size() > 0;
+      }
+      next();
+    },
+  );
+};
+
+const setFocusTimer = (ctx, next) => {
+  if (!ctx.listLiveView || !ctx.focusTimerModalShown) {
+    next();
+    return;
+  }
+
+  // The item_id should be stored from the previous step
+  // Let's extract it from the focus timer state
+  const html = ctx.listLiveView.getHtml();
+  const doc = parseHTML(html);
+  const form = doc.find('form[phx-submit="set_focus_timer"]');
+  const itemId = form.attr("phx-value-item_id");
+
+  if (!itemId) {
+    next();
+    return;
+  }
+
+  // Try using pushClick with all parameters instead of pushForm
+  ctx.listLiveView.pushClick(
+    "set_focus_timer",
+    {
+      item_id: itemId,
+      minutes: "0",
+      seconds: "5",
+    },
+    (type, response) => {
+      if (type === "message") {
+        const updatedHtml = ctx.listLiveView.getHtml();
+        const updatedDoc = parseHTML(updatedHtml);
+
+        // Check if focus mode is active
+        ctx.focusModeActive =
+          updatedDoc.find("#focus-mode").size() > 0 &&
+          updatedDoc.find("#countdown-timer").size() > 0 &&
+          updatedDoc.find("h1").text().includes("New task");
+
+        // Set up timeout to continue after 5 seconds
+        ctx.listLiveView.channel.socket.setTimeout(() => {
+          next();
+        }, 5200); // 5.2 seconds to ensure timer completes
+      } else {
+        next();
+      }
+    },
+  );
+};
+
+const verifyFocusTimerComplete = (ctx, next) => {
+  if (!ctx.focusModeActive) {
+    next();
+    return;
+  }
+
+  // Check if we received a server-pushed event
+  const events = ctx.listLiveView.getEvents();
+
+  ctx.focusModeDeactivated = events.some((event) => {
+    return (
+      event[0] === "focus-complete" &&
+      event[1]?.message === "Focus time complete!"
+    );
+  });
+
+  ctx.listLiveView.resetEvents();
+
+  next();
+};
+
 const leaveListPage = createLeaveLiveViewStep({
   liveViewKey: "listLiveView",
 });
@@ -191,6 +292,9 @@ export default function () {
     pageTitleCorrectAfterSave: false,
     refreshButtonDisabledAfterClick: false,
     refreshButtonReEnabled: false,
+    focusTimerModalShown: false,
+    focusModeActive: false,
+    focusModeDeactivated: false,
   };
 
   // Define steps
@@ -204,6 +308,9 @@ export default function () {
     .addStep("Add first todo list item", addFirstTodoListItem)
     .addStep("Click refresh button", clickRefreshButton)
     .addStep("Wait for refresh complete", waitForRefreshComplete)
+    .addStep("Click focus timer", clickFocusTimer)
+    .addStep("Set focus timer", setFocusTimer)
+    .addStep("Wait for focus timer complete", verifyFocusTimerComplete)
     .addStep("Leave list page", leaveListPage);
 
   // Define checks
@@ -236,6 +343,15 @@ export default function () {
     .addCheck(
       "Refresh button re-enabled after async cycle",
       (ctx) => ctx.refreshButtonReEnabled === true,
+    )
+    .addCheck(
+      "Focus timer modal shown",
+      (ctx) => ctx.focusTimerModalShown === true,
+    )
+    .addCheck("Focus mode activated", (ctx) => ctx.focusModeActive === true)
+    .addCheck(
+      "Focus mode deactivated after timer",
+      (ctx) => ctx.focusModeDeactivated === true,
     );
 
   // Run the scenario
