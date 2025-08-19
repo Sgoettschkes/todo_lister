@@ -262,8 +262,8 @@ const verifyFocusTimerComplete = (ctx, next) => {
 
   ctx.focusModeDeactivated = events.some((event) => {
     return (
-      event[0] === "focus-complete" &&
-      event[1]?.message === "Focus time complete!"
+      event.action === "focus-complete" &&
+      event.payload?.message === "Focus time complete!"
     );
   });
 

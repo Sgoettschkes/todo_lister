@@ -195,13 +195,15 @@ export default class LiveView {
   _extractEvents(diff) {
     if (diff && typeof diff === "object") {
       const extracted = Rendered.extract(diff);
-      const timestamp = Date.now();
-      extracted.events.forEach((event) => {
-        this.events.push({
-          ...event,
-          timestamp: timestamp,
+      if (extracted.events && extracted.events.length > 0) {
+        extracted.events.forEach((eventArray) => {
+          this.events.push({
+            action: eventArray[0],
+            payload: eventArray[1],
+            timestamp: Date.now(),
+          });
         });
-      });
+      }
     }
   }
 }
