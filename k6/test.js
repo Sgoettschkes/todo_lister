@@ -140,7 +140,7 @@ const clickRefreshButton = (ctx, next) => {
         refreshButton.size() > 0 &&
         refreshButton.attr("disabled") !== undefined;
 
-      ctx.liveView.channel.socket.setTimeout(() => {
+      ctx.liveView.setTimeout(() => {
         next();
       }, 2500);
     } else {
@@ -234,7 +234,7 @@ const setFocusTimer = (ctx, next) => {
           updatedDoc.find("h1").text().includes("New task");
 
         // Set up timeout to continue after 5 seconds
-        ctx.liveView.channel.socket.setTimeout(() => {
+        ctx.liveView.setTimeout(() => {
           next();
         }, 5200); // 5.2 seconds to ensure timer completes
       } else {
