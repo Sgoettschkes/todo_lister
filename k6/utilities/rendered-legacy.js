@@ -674,7 +674,7 @@ export default class RenderedLegacy {
    * Merge components from diff
    */
   mergeComponents(diff) {
-    const newc = diff[COMPONENTS];
+    const newc = diff?.[COMPONENTS];
     if (!newc) return;
 
     if (!this.rendered[COMPONENTS]) {

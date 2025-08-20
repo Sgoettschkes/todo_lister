@@ -15,8 +15,8 @@ export default class LiveView {
   }
 
   connect(callback = () => {}) {
-    // Get the initial page to extract LiveView data
     const response = http.get(this.url.toString());
+    this.url = new URL(response.url);
 
     if (response.status !== 200) {
       callback("error", `Failed to load page: ${response.status}`);
@@ -35,11 +35,9 @@ export default class LiveView {
       return;
     }
 
-    // Add required query parameters to WebSocket URL
     this.websocketUrl.searchParams.append("vsn", "2.0.0");
     this.websocketUrl.searchParams.append("_csrf_token", csrfToken);
 
-    // Create channel for LiveView connection with broadcast handler
     this.channel = new Channel(
       this.websocketUrl.toString(),
       `lv:${phxId}`,
@@ -47,7 +45,6 @@ export default class LiveView {
       this._createBroadcastHandler(),
     );
 
-    // Join the LiveView channel - now purely callback-based
     this.channel.join(
       {
         url: this.url.toString(),
@@ -62,7 +59,6 @@ export default class LiveView {
         if (type === "connection") {
           callback(type, message);
         } else {
-          // Handle other messages with wrapped callback
           this._wrapChannelCallback(callback)(type, message);
         }
       },
@@ -70,9 +66,7 @@ export default class LiveView {
   }
 
   leave() {
-    if (this.channel) {
-      this.channel.leave();
-    }
+    this.channel?.leave();
   }
 
   pushClick(event, value = {}, callback = () => {}) {
@@ -99,13 +93,11 @@ export default class LiveView {
   }
 
   heartbeat() {
-    if (this.channel) {
-      this.channel.sendToTopic("heartbeat", "phoenix", {});
-    }
+    this.channel?.sendToTopic("heartbeat", "phoenix", {});
   }
 
   getHtml() {
-    return this.rendered ? this.rendered.getFullHTML() : null;
+    return this.rendered?.getFullHTML();
   }
 
   getEvents() {
@@ -145,11 +137,7 @@ export default class LiveView {
   }
 
   _send(event, payload = {}, callback = () => {}) {
-    if (!this.channel) {
-      return;
-    }
-
-    this.channel.send(
+    this.channel?.send(
       "event",
       {
         type: event,
@@ -164,15 +152,11 @@ export default class LiveView {
     return (type, message) => {
       if (message.event === "phx_reply" && message.payload?.status === "ok") {
         if (message.payload.response?.rendered) {
-          if (this.rendered) {
-            this.rendered.applyRendered(message.payload.response.rendered);
-          }
+          this.rendered?.applyRendered(message.payload.response.rendered);
         } else if (message.payload.response?.diff) {
           this._extractEvents(message.payload.response.diff);
 
-          if (this.rendered) {
-            this.rendered.applyDiff(message.payload.response.diff);
-          }
+          this.rendered?.applyDiff(message.payload.response.diff);
         }
       }
 
@@ -185,9 +169,7 @@ export default class LiveView {
       if (message.event === "diff" && message.payload) {
         this._extractEvents(message.payload);
 
-        if (this.rendered) {
-          this.rendered.applyDiff(message.payload);
-        }
+        this.rendered?.applyDiff(message.payload);
       }
     };
   }
