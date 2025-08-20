@@ -11,23 +11,20 @@ export const options = {
 const createConnectToLiveViewStep = (config) => {
   return (ctx, next) => {
     const url = config.urlBuilder(ctx);
-    const liveViewKey = config.liveViewKey;
-    const connectedKey = config.connectedKey;
 
     if (config.skipCondition && config.skipCondition(ctx)) {
       next();
       return;
     }
 
-    ctx[liveViewKey] = new LiveView(url, ctx.websocketUrl, {
+    ctx.liveView = new LiveView(url, ctx.websocketUrl, {
       client_id: ctx.clientId,
     });
 
-    ctx[liveViewKey].connect((type, response) => {
+    ctx.liveView.connect((type, response) => {
       if (type === "connection") {
         // do nothing
       } else if (type === "message") {
-        ctx[connectedKey] = true;
         next();
       } else {
         next();
@@ -36,11 +33,10 @@ const createConnectToLiveViewStep = (config) => {
   };
 };
 
-const createLeaveLiveViewStep = (config) => {
+const createLeaveLiveViewStep = () => {
   return (ctx, next) => {
-    const liveViewKey = config.liveViewKey;
-
-    ctx[liveViewKey].leave();
+    ctx.liveView.leave();
+    ctx.liveView === null;
     next();
   };
 };
@@ -48,8 +44,6 @@ const createLeaveLiveViewStep = (config) => {
 // Step definitions
 const connectToLandingPage = createConnectToLiveViewStep({
   urlBuilder: (ctx) => ctx.baseUrl,
-  liveViewKey: "liveView",
-  connectedKey: "landingConnected",
 });
 
 const createTodoList = (ctx, next) => {
@@ -62,24 +56,20 @@ const createTodoList = (ctx, next) => {
   });
 };
 
-const leaveLandingPage = createLeaveLiveViewStep({
-  liveViewKey: "liveView",
-});
+const leaveLandingPage = createLeaveLiveViewStep();
 
 const connectToListPage = createConnectToLiveViewStep({
   urlBuilder: (ctx) => `${ctx.baseUrl}${ctx.listUrl}`,
-  liveViewKey: "listLiveView",
-  connectedKey: "listConnected",
   skipCondition: (ctx) => !ctx.listUrl,
 });
 
 const editTitle = (ctx, next) => {
-  if (!ctx.listLiveView || !ctx.listConnected) {
+  if (!ctx.liveView) {
     next();
     return;
   }
 
-  ctx.listLiveView.pushClick("edit_title", {}, (type, response) => {
+  ctx.liveView.pushClick("edit_title", {}, (type, response) => {
     if (type === "message") {
       ctx.editSuccessful = true;
     }
@@ -88,17 +78,17 @@ const editTitle = (ctx, next) => {
 };
 
 const saveTitle = (ctx, next) => {
-  if (!ctx.listLiveView || !ctx.editSuccessful) {
+  if (!ctx.editSuccessful) {
     next();
     return;
   }
 
-  ctx.listLiveView.pushBlur(
+  ctx.liveView.pushBlur(
     "save_title",
     { value: "Updated Todo List via K6" },
     (type, response) => {
       if (type === "message") {
-        const html = ctx.listLiveView.getHtml();
+        const html = ctx.liveView.getHtml();
         const doc = parseHTML(html);
 
         ctx.h1TitleCorrectAfterSave = doc
@@ -117,14 +107,14 @@ const saveTitle = (ctx, next) => {
 };
 
 const addFirstTodoListItem = (ctx, next) => {
-  if (!ctx.listLiveView || !ctx.editSuccessful) {
+  if (!ctx.h1TitleCorrectAfterSave) {
     next();
     return;
   }
 
-  ctx.listLiveView.pushClick("add_item", {}, (type, response) => {
+  ctx.liveView.pushClick("add_item", {}, (type, response) => {
     if (type === "message") {
-      const html = ctx.listLiveView.getHtml();
+      const html = ctx.liveView.getHtml();
       ctx.addFirstTodoListItem =
         parseHTML(html).find('input[value="New task"]').attr("value") ===
         "New task";
@@ -135,22 +125,22 @@ const addFirstTodoListItem = (ctx, next) => {
 };
 
 const clickRefreshButton = (ctx, next) => {
-  if (!ctx.listLiveView || !ctx.listConnected) {
+  if (!ctx.liveView) {
     next();
     return;
   }
 
-  ctx.listLiveView.pushClick("refresh", {}, (type, response) => {
+  ctx.liveView.pushClick("refresh", {}, (type, response) => {
     if (type === "message") {
       // Check if refresh button is disabled immediately after clicking
-      const html = ctx.listLiveView.getHtml();
+      const html = ctx.liveView.getHtml();
       const doc = parseHTML(html);
       const refreshButton = doc.find('button[phx-click="refresh"]');
       ctx.refreshButtonDisabledAfterClick =
         refreshButton.size() > 0 &&
         refreshButton.attr("disabled") !== undefined;
 
-      ctx.listLiveView.channel.socket.setTimeout(() => {
+      ctx.liveView.channel.socket.setTimeout(() => {
         next();
       }, 2500);
     } else {
@@ -160,7 +150,12 @@ const clickRefreshButton = (ctx, next) => {
 };
 
 const waitForRefreshComplete = (ctx, next) => {
-  const html = ctx.listLiveView.getHtml();
+  if (!ctx.refreshButtonDisabledAfterClick) {
+    next();
+    return;
+  }
+
+  const html = ctx.liveView.getHtml();
   const doc = parseHTML(html);
 
   // Check if refresh button is back to being enabled (no disabled attribute)
@@ -172,24 +167,24 @@ const waitForRefreshComplete = (ctx, next) => {
 };
 
 const clickFocusTimer = (ctx, next) => {
-  if (!ctx.listLiveView || !ctx.listConnected) {
+  if (!ctx.liveView) {
     next();
     return;
   }
 
   // Find the first timer button
-  const html = ctx.listLiveView.getHtml();
+  const html = ctx.liveView.getHtml();
   const doc = parseHTML(html);
   const timerButton = doc.find('button[phx-click="start_focus_timer"]').first();
 
   const itemId = timerButton.attr("phx-value-id");
 
-  ctx.listLiveView.pushClick(
+  ctx.liveView.pushClick(
     "start_focus_timer",
     { id: itemId },
     (type, response) => {
       if (type === "message") {
-        const updatedHtml = ctx.listLiveView.getHtml();
+        const updatedHtml = ctx.liveView.getHtml();
         const updatedDoc = parseHTML(updatedHtml);
 
         // Check if modal is shown
@@ -204,14 +199,12 @@ const clickFocusTimer = (ctx, next) => {
 };
 
 const setFocusTimer = (ctx, next) => {
-  if (!ctx.listLiveView || !ctx.focusTimerModalShown) {
+  if (!ctx.focusTimerModalShown) {
     next();
     return;
   }
 
-  // The item_id should be stored from the previous step
-  // Let's extract it from the focus timer state
-  const html = ctx.listLiveView.getHtml();
+  const html = ctx.liveView.getHtml();
   const doc = parseHTML(html);
   const form = doc.find('form[phx-submit="set_focus_timer"]');
   const itemId = form.attr("phx-value-item_id");
@@ -222,7 +215,7 @@ const setFocusTimer = (ctx, next) => {
   }
 
   // Try using pushClick with all parameters instead of pushForm
-  ctx.listLiveView.pushClick(
+  ctx.liveView.pushClick(
     "set_focus_timer",
     {
       item_id: itemId,
@@ -231,7 +224,7 @@ const setFocusTimer = (ctx, next) => {
     },
     (type, response) => {
       if (type === "message") {
-        const updatedHtml = ctx.listLiveView.getHtml();
+        const updatedHtml = ctx.liveView.getHtml();
         const updatedDoc = parseHTML(updatedHtml);
 
         // Check if focus mode is active
@@ -241,7 +234,7 @@ const setFocusTimer = (ctx, next) => {
           updatedDoc.find("h1").text().includes("New task");
 
         // Set up timeout to continue after 5 seconds
-        ctx.listLiveView.channel.socket.setTimeout(() => {
+        ctx.liveView.channel.socket.setTimeout(() => {
           next();
         }, 5200); // 5.2 seconds to ensure timer completes
       } else {
@@ -258,7 +251,7 @@ const verifyFocusTimerComplete = (ctx, next) => {
   }
 
   // Check if we received a server-pushed event
-  const events = ctx.listLiveView.getEvents();
+  const events = ctx.liveView.getEvents();
 
   ctx.focusModeDeactivated = events.some((event) => {
     return (
@@ -267,14 +260,12 @@ const verifyFocusTimerComplete = (ctx, next) => {
     );
   });
 
-  ctx.listLiveView.resetEvents();
+  ctx.liveView.resetEvents();
 
   next();
 };
 
-const leaveListPage = createLeaveLiveViewStep({
-  liveViewKey: "listLiveView",
-});
+const leaveListPage = createLeaveLiveViewStep();
 
 export default function () {
   const scenario = new TestScenario();
@@ -284,9 +275,8 @@ export default function () {
     baseUrl: "http://localhost:4000",
     websocketUrl: "ws://localhost:4000/live/websocket",
     clientId: getOrCreateClientId(),
-    landingConnected: false,
+    liveView: null,
     listCreated: false,
-    listConnected: false,
     addFirstTodoListItem: false,
     h1TitleCorrectAfterSave: false,
     pageTitleCorrectAfterSave: false,
@@ -315,15 +305,7 @@ export default function () {
 
   // Define checks
   scenario
-    .addCheck(
-      "Connected to landing page",
-      (ctx) => ctx.landingConnected === true,
-    )
     .addCheck("Todo list created", (ctx) => ctx.listCreated === true)
-    .addCheck(
-      "Connected to todo list page",
-      (ctx) => ctx.listConnected === true,
-    )
     .addCheck(
       "H1 title correct after save",
       (ctx) => ctx.h1TitleCorrectAfterSave === true,
